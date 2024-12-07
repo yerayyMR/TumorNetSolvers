@@ -21,13 +21,13 @@ TumorNetSolvers provides a flexible and efficient solution for simulating tumor 
 
 
 ### Forward Problem
-<img src="images/fwd.png" style="width: 50%;"/>
+<img src="images/fwd.png" style="width: 80%;"/>
 
 - **Input**: A 3D medical image (e.g., brain tissue segmentations) and tumor parameters (growth rate, diffusion coefficient, tumor location).  
 - **Output**: A 3D simulation of tumor corresponding to that anatomy info and those tumor parameters  
 
 ### Inverse Problem
-![Inverse Problem](images/inv.png)
+<img src="images/inv.png" style="width: 80%;"/>
 As illustrated in the above diagram.
 Given a high-performing differentiable forward model, we "freeze" the model and optimize its parameters based on a target tumor simulation.
 - **Input**: A target tumor simulation (e.g., MRI-based 3D tumor image).  
