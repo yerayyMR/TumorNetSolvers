@@ -21,7 +21,8 @@ TumorNetSolvers provides a flexible and efficient solution for simulating tumor 
 
 
 ### Forward Problem
-![Forward Problem](images/fwd.png)
+<img src="images/fwd.png" style="width: 50%;"/>
+
 - **Input**: A 3D medical image (e.g., brain tissue segmentations) and tumor parameters (growth rate, diffusion coefficient, tumor location).  
 - **Output**: A 3D simulation of tumor corresponding to that anatomy info and those tumor parameters  
 
