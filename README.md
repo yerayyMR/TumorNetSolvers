@@ -61,21 +61,19 @@ Below is a diagram illustrating the **Inverse Problem**:
 
 ## Model Architecture
 
+![TumorSurrogate Architecture](images/architectures.png)  
 TumorNetSolvers includes three key models:  
 
 1. **TumorSurrogate (Baseline)**:
    - A 3D CNN that integrates anatomy info and tumor metadata for conditioned tumor simulation.  
-   Below is a diagram illustrating the **TumorSurrogate Architecture (CNN)**:  
-   ![TumorSurrogate Architecture](images/cnn.png)  
+   See above diagram illustrating the **TumorSurrogate Architecture (CNN)**:  
 
 2. **Modified nnU-Net**:  
    - A adapted version of nnU-Net for tumor growth simulation using conditioned inputs.  
 
 3. **3D Vision Transformer (ViT)**:  
    - A transformer-based model incorporating tumor metadata as additional input token in embedding space.  
-   Below is a diagram illustrating the **ViT Architecture**:  
-   ![ViT Architecture](images/vit.png)
-
+   See above diagram illustrating the **ViT Architecture**:  
 ---
 
 ## Usage
