@@ -6,7 +6,7 @@
 ### Table of Contents:
 1. [Overview](#overview)  
 2. [Core Concepts](#core-concepts)  
-3. [Model Architecture](#model-architecture)  
+3. [Model Architectures](#model-architecture)  
 4. [Usage](#usage)  
 5. [Installation](#installation)  
 7. [Contributing](#contributing)  
@@ -18,18 +18,20 @@
 ## Overview
 
 TumorNetSolvers provides a flexible and efficient solution for simulating tumor growth in 3D using **Partial Differential Equations (PDEs)**, specifically the Fisher-Kolmogorov equation. It personalizes the model for individual patients by inferring **tumor growth parameters** (diffusion coefficient, growth rate, initial location) from MRI scans or similar medical images.  
-![Forward Problem](images/fwd.png)
+
 
 ### Forward Problem
+![Forward Problem](images/fwd.png)
 - **Input**: A 3D medical image (e.g., brain tissue segmentations) and tumor parameters (growth rate, diffusion coefficient, tumor location).  
 - **Output**: A 3D simulation of tumor corresponding to that anatomy info and those tumor parameters  
 
 ### Inverse Problem
-- **Input**: A target tumor simulation (e.g., MRI-based 3D tumor image).  
-- **Goal**: Infer tumor parameters by optimizing the model to match the target simulation.
-
-Below is a diagram illustrating the **Inverse Problem**:  
 ![Inverse Problem](images/inv.png)
+As illustrated in the above diagram.
+Given a high-performing differentiable forward model, we "freeze" the model and optimize its parameters based on a target tumor simulation.
+- **Input**: A target tumor simulation (e.g., MRI-based 3D tumor image).  
+- **Goal**: Infer the underlying tumor parameters (e.g., growth rate, diffusion coefficient, tumor location) by adjusting these input parameters to match the target simulation.
+
 
 
 ## Core Concepts
@@ -41,11 +43,11 @@ Below is a diagram illustrating the **Inverse Problem**:
    $$ \frac{\partial c}{\partial t} = \nabla \cdot (D \nabla c) + \rho c(1 - c) $$
 
    Where:
-   - \( c(x, t) \) is the tumor cell concentration,
-   - \( D \) is the diffusion coefficient,
-   - \( \rho \) is the growth rate,
-   - \( \nabla \cdot (D \nabla c) \) is the diffusion term,
-   - \( \rho c(1 - c) \) models logistic growth, limiting \( c \) as it approaches 1.
+   - $$\( c(x, t) \)$$ is the tumor cell concentration,
+   - $$\( D \)$$ is the diffusion coefficient,
+   - $$\( \rho \)$$ is the growth rate,
+   - $$\( \nabla \cdot (D \nabla c) \)$$ is the diffusion term,
+   - $$\( \rho c(1 - c) \)$$ models logistic growth, limiting \( c \) as it approaches 1.
 
    TumorNetSolvers uses deep learning to approximate this PDE's solutions but can in theory be used on PDE-based models (as the framework is adaptable to different input shapes and tumor parameter sizes).
 
@@ -59,21 +61,21 @@ Below is a diagram illustrating the **Inverse Problem**:
 
 ---
 
-## Model Architecture
+## Model Architectures
 
 ![TumorSurrogate Architecture](images/architectures.png)  
 TumorNetSolvers includes three key models:  
 
 1. **TumorSurrogate (Baseline)**:
    - A 3D CNN that integrates anatomy info and tumor metadata for conditioned tumor simulation.  
-   See above diagram illustrating the **TumorSurrogate Architecture (CNN)**:  
+   See above diagram illustrating the **TumorSurrogate Architecture (CNN)**.  
 
 2. **Modified nnU-Net**:  
-   - A adapted version of nnU-Net for tumor growth simulation using conditioned inputs.  
+   - A adapted version of the powerful self-configuring framework nnU-Net for tumor growth simulation using conditioned inputs.  
 
 3. **3D Vision Transformer (ViT)**:  
    - A transformer-based model incorporating tumor metadata as additional input token in embedding space.  
-   See above diagram illustrating the **ViT Architecture**:  
+   See above diagram illustrating the **ViT Architecture**.
 ---
 
 ## Usage
@@ -113,9 +115,9 @@ This project is licensed under the MIT License and incorporates code from nnU-Ne
 
 ## References
 
-1. Weidner J, Ezhov I, Balcerak M, Menze B, Wiestler B. Rapid Personalization of PDE-Based Tumor Growth Using a Differentiable Forward Model. Medical Imaging with Deep Learning. 2024. [Link](https://openreview.net/pdf?id=7SMswKSKIX)  
-2. Ezhov I, Mot T, Shit S, Lipkova J, Paetzold JC, Kofler F, et al. Geometry-aware Neural Solver for Fast Bayesian Calibration of Brain Tumor Models. IEEE Transactions on Medical Imaging. 2021;41(5):1269–78. [Link](https://ieeexplore.ieee.org/abstract/document/9656125)  
+1. Weidner J, Ezhov I, Balcerak M, Menze B, Wiestler B. Rapid Personalization of PDE-Based Tumor Growth Using a Differentiable Forward Model. Medical Imaging with Deep Learning. 2024. [DOI](https://openreview.net/pdf?id=7SMswKSKIX)  
+2. Ezhov I, Mot T, Shit S, Lipkova J, Paetzold JC, Kofler F, et al. Geometry-aware Neural Solver for Fast Bayesian Calibration of Brain Tumor Models. IEEE Transactions on Medical Imaging. 2021;41(5):1269–78. [DOI](https://ieeexplore.ieee.org/abstract/document/9656125)  
 3. Isensee F, Jaeger PF, Kohl S, Petersen J, Maier-Hein KH. nnU-Net: A Self-configuring Method for Deep Learning-based Biomedical Image Segmentation. Nature Methods. 2021;18(2):203–11. [DOI](https://www.nature.com/articles/s41592-020-01008-z)  
-4. Lin K, Heckel R. Vision Transformers Enable Fast and Robust Accelerated MRI. International Conference on Medical Imaging with Deep Learning. 2022. [Link](https://proceedings.mlr.press/v172/lin22a.html)
+4. Lin K, Heckel R. Vision Transformers Enable Fast and Robust Accelerated MRI. International Conference on Medical Imaging with Deep Learning. 2022. [DOI](https://proceedings.mlr.press/v172/lin22a.html)
 
 
