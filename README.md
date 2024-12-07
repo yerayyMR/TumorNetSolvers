@@ -40,7 +40,9 @@ Given a high-performing differentiable forward model, we "freeze" the model and 
 1. **PDE-based Tumor Growth Modeling**:  
    TumorNetSolvers is trained on the Fisher-Kolmogorov equation to model brain tumor cell dynamics over time and space:
 
-   $$ \frac{\partial c}{\partial t} = \nabla \cdot (D \nabla c) + \rho c(1 - c) $$
+   $$ 
+   \frac{\partial c}{\partial t} = \nabla \cdot (D \nabla c) + \rho c(1 - c)
+   $$
 
    Where:
    - $$\( c(x, t) \)$$ is the tumor cell concentration,
