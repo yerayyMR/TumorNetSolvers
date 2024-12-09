@@ -1,9 +1,10 @@
 
 # TumorNetSolvers: A Deep Learning Framework for Personalized PDE-Based Tumor Growth Modeling
 
-![Tumor Simulation Comparison](images/preds.png)
 
 **TumorNetSolvers** is an adaptive deep learning framework designed for efficient personalization of PDE-based tumor growth models, focused on simulating and predicting tumor evolution. Built on the powerful nnU-Net framework, it leverages state-of-the-art neural architectures to address both **forward** and **inverse** tumor modeling problems.
+
+![Tumor Simulation Comparison](images/preds.png)
 
 ---
 
