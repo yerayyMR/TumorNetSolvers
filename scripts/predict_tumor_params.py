@@ -232,12 +232,12 @@ def infer_parameters(dataset_name: str, model: str, data_folder: str, output_bas
 
         wandb.save(os.path.join(save_path, "logDict.pth"))
         wandb.finish()
-        break  # Process only first batch, like in original script
+        break 
 
 
 if __name__=="__main__":
     DATASET_NAME = "Dataset500_Brain"
-    MODEL = "nnUnet"  # Can also be 'nnUnet' or 'TumorSurrogate'
+    MODEL = "nnUnet"  # Can also be 'ViT' or 'TumorSurrogate'
     DATA_FOLDER = os.path.join(nnUNet_preprocessed, DATASET_NAME,"nnUNetPlans_3d_fullres")
     OUTPUT_BASE = os.path.join(nnUNet_results, DATASET_NAME, 'infer_params')
     
