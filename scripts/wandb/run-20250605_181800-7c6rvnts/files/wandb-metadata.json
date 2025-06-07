@@ -1,0 +1,17 @@
+{
+  "os":  "Linux-5.13.0-39-generic-x86_64-with-glibc2.31",
+  "python":  "3.10.16",
+  "startedAt":  "2025-06-05T16:18:03.493164Z",
+  "program":  "/home/home/yeray_jonas/tumornetsolvers/scripts/training.py",
+  "codePath":  "scripts/training.py",
+  "git":  {
+    "remote":  "https://github.com/yerayyMR/TumorNetSolvers.git",
+    "commit":  "795ff67ee9fe6f5eba522d4449b25801570bbd45"
+  },
+  "email":  "yeray.martin-ruisanchez@tum.de",
+  "root":  "/home/home/yeray_jonas/tumornetsolvers/scripts",
+  "host":  "ibbm-giga",
+  "username":  "yeray_jonas",
+  "executable":  "/home/home/yeray_jonas/anaconda3/envs/tumor_env/bin/python",
+  "codePathLocal":  "training.py"
+}
