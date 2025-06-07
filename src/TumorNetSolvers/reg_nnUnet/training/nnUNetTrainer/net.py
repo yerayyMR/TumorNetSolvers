@@ -6,7 +6,7 @@ import pydoc
 import warnings
 from typing import Union
 
-from reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
+from TumorNetSolvers.reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
 from batchgenerators.utilities.file_and_folder_operations import join
 
 #this function is slightly modified from nnUnet.utilities.get_network_from_plans
@@ -170,13 +170,14 @@ from dynamic_network_architectures.building_blocks.helper import convert_conv_op
 from dynamic_network_architectures.building_blocks.plain_conv_encoder import PlainConvEncoder
 #from dynamic_network_architectures.building_blocks.unet_decoder import UNetDecoder
 from dynamic_network_architectures.initialization.weight_init import InitWeights_He
+from torch.nn.modules.conv import _ConvNd
 
 class PlainConvUNetNew(nn.Module):
     def __init__(self,
                  input_channels: int,
                  n_stages: int,
                  features_per_stage: Union[int, List[int], Tuple[int, ...]],
-                 conv_op: Type[nn.ConvNd],
+                 conv_op: Type[_ConvNd],
                  kernel_sizes: Union[int, List[int], Tuple[int, ...]],
                  strides: Union[int, List[int], Tuple[int, ...]],
                  n_conv_per_stage: Union[int, List[int], Tuple[int, ...]],
