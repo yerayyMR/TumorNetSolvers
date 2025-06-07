@@ -4,7 +4,7 @@ from typing import  Literal
 from typing import Tuple, Union, List
 from torch._dynamo import OptimizedModule    
 
-from TumorNetSolvers.reg_nnUNet.utilities.plans_handling.plans_handler import PlansManager
+from TumorNetSolvers.reg_nnUnet.utilities.plans_handling.plans_handler import PlansManager
 from TumorNetSolvers.preprocessing.target_handling import RegressionManager
 from TumorNetSolvers.models.tumor_surrogate_net import TumorSurrogate
 from TumorNetSolvers.models.ViT import CombinedVisionTransformer3D
