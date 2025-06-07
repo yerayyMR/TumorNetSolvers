@@ -11,12 +11,12 @@ from typing import Union, Tuple, List, Type, Callable
 import numpy as np
 import torch
 
-from reg_nnUnet.preprocessing.resampling.utils import recursive_find_resampling_fn_by_name
-import reg_nnUnet
+from TumorNetSolvers.reg_nnUnet.preprocessing.resampling.utils import recursive_find_resampling_fn_by_name
+import TumorNetSolvers.reg_nnUnet as reg_nnUnet
 from batchgenerators.utilities.file_and_folder_operations import load_json, join
 
-from reg_nnUnet.imageio.reader_writer_registry import recursive_find_reader_writer_by_name
-from reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
+from TumorNetSolvers.reg_nnUnet.imageio.reader_writer_registry import recursive_find_reader_writer_by_name
+from TumorNetSolvers.reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
 #from reg_nnUnet.utilities.label_handling.target_handling import get_labelmanager_class_from_plans
 
 # see https://adamj.eu/tech/2021/05/13/python-type-hints-how-to-fix-circular-imports/
@@ -24,9 +24,9 @@ from typing import TYPE_CHECKING
 from dynamic_network_architectures.building_blocks.helper import convert_dim_to_conv_op, get_matching_instancenorm
 
 if TYPE_CHECKING:
-    from reg_nnUnet.imageio.base_reader_writer import BaseReaderWriter
-    from reg_nnUnet.preprocessing.preprocessors.default_preprocessor import DefaultPreprocessor
-    from reg_nnUnet.experiment_planning.experiment_planners.default_experiment_planner import ExperimentPlanner
+    from TumorNetSolvers.reg_nnUnet.imageio.base_reader_writer import BaseReaderWriter
+    from TumorNetSolvers.reg_nnUnet.preprocessing.preprocessors.default_preprocessor import DefaultPreprocessor
+    from TumorNetSolvers.reg_nnUnet.experiment_planning.experiment_planners.default_experiment_planner import ExperimentPlanner
 
 
 class ConfigurationManager(object):
@@ -41,13 +41,13 @@ class ConfigurationManager(object):
                           "or update your implementation + plans.")
             # try to build the architecture information from old plans, modify configuration dict to match new standard
             unet_class_name = self.configuration["UNet_class_name"]
-            if unet_class_name == "PlainConvUNet":
-                network_class_name = "dynamic_network_architectures.architectures.unet.PlainConvUNet"
+            if unet_class_name == "PlainConvUnetNew":
+                network_class_name = "TumorsNetSolvers.models.dynamic_Unets.PlainConvUNetNew"
             elif unet_class_name == 'ResidualEncoderUNet':
                 network_class_name = "dynamic_network_architectures.architectures.residual_unet.ResidualEncoderUNet"
             else:
                 raise RuntimeError(f'Unknown architecture {unet_class_name}. This conversion only supports '
-                                   f'PlainConvUNet and ResidualEncoderUNet')
+                                   f'PlainConvUnetNew and ResidualEncoderUNet')
 
             n_stages = len(self.configuration["n_conv_per_stage_encoder"])
 
@@ -55,7 +55,7 @@ class ConfigurationManager(object):
             conv_op = convert_dim_to_conv_op(dim)
             instnorm = get_matching_instancenorm(dimension=dim)
 
-            convs_or_blocks = "n_conv_per_stage" if unet_class_name == "PlainConvUNet" else "n_blocks_per_stage"
+            convs_or_blocks = "n_conv_per_stage" if unet_class_name == "PlainConvUNetNew" else "n_blocks_per_stage"
 
             arch_dict = {
                 'network_class_name': network_class_name,
@@ -113,7 +113,7 @@ class ConfigurationManager(object):
     def preprocessor_class(self) -> Type[DefaultPreprocessor]:
         preprocessor_class = recursive_find_python_class(join(reg_nnUnet.__path__[0], "preprocessing"),
                                                          self.preprocessor_name,
-                                                         current_module="reg_nnUnet.preprocessing")
+                                                         current_module="TumorNetSolvers.reg_nnUnet.preprocessing")
         return preprocessor_class
 
     @property
@@ -301,7 +301,7 @@ class PlansManager(object):
         planner_name = self.experiment_planner_name
         experiment_planner = recursive_find_python_class(join(reg_nnUnet.__path__[0], "experiment_planning"),
                                                          planner_name,
-                                                         current_module="reg_nnUnet.experiment_planning")
+                                                         current_module="TumorNetSolvers.reg_nnUnet.experiment_planning")
         return experiment_planner
 
     @property
@@ -318,8 +318,8 @@ class PlansManager(object):
 
 
 if __name__ == '__main__':
-    from reg_nnUnet.paths import nnUNet_preprocessed
-    from reg_nnUnet.utilities.dataset_name_id_conversion import maybe_convert_to_dataset_name
+    from TumorNetSolvers.reg_nnUnet.paths import nnUNet_preprocessed
+    from TumorNetSolvers.reg_nnUnet.utilities.dataset_name_id_conversion import maybe_convert_to_dataset_name
 
     plans = load_json(join(nnUNet_preprocessed, maybe_convert_to_dataset_name(3), 'nnUNetPlans.json'))
     # build new configuration that inherits from 3d_fullres
