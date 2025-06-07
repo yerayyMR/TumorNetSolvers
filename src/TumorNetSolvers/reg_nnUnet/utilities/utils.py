@@ -20,7 +20,7 @@ from batchgenerators.utilities.file_and_folder_operations import *
 import numpy as np
 import re
 
-from reg_nnUnet.paths import nnUNet_raw
+from TumorNetSolvers.reg_nnUnet.paths import nnUNet_raw
 from multiprocessing import Pool
 
 

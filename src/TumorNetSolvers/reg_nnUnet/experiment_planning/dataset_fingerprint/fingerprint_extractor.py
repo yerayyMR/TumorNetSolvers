@@ -8,13 +8,13 @@ import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import load_json, join, save_json, isfile, maybe_mkdir_p
 from tqdm import tqdm
 
-from reg_nnUnet.imageio.base_reader_writer import BaseReaderWriter
-from reg_nnUnet.imageio.reader_writer_registry import determine_reader_writer_from_dataset_json
-from reg_nnUnet.paths import nnUNet_raw, nnUNet_preprocessed
-from reg_nnUnet.preprocessing.cropping.cropping import crop_to_nonzero
-from reg_nnUnet.utilities.dataset_name_id_conversion import maybe_convert_to_dataset_name
-from reg_nnUnet.utilities.utils import get_filenames_of_train_images_and_targets
-from reg_nnUnet.imageio.simpleitk_reader_writer import SimpleITKIO2
+from TumorNetSolvers.reg_nnUnet.imageio.base_reader_writer import BaseReaderWriter
+from TumorNetSolvers.reg_nnUnet.imageio.reader_writer_registry import determine_reader_writer_from_dataset_json
+from TumorNetSolvers.reg_nnUnet.paths import nnUNet_raw, nnUNet_preprocessed
+from TumorNetSolvers.reg_nnUnet.preprocessing.cropping.cropping import crop_to_nonzero
+from TumorNetSolvers.reg_nnUnet.utilities.dataset_name_id_conversion import maybe_convert_to_dataset_name
+from TumorNetSolvers.reg_nnUnet.utilities.utils import get_filenames_of_train_images_and_targets
+from TumorNetSolvers.reg_nnUnet.imageio.simpleitk_reader_writer import SimpleITKIO2
 
 class DatasetFingerprintExtractor(object):
     def __init__(self, dataset_name_or_id: Union[str, int], num_processes: int = 8, verbose: bool = False):

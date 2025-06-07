@@ -11,11 +11,11 @@ import numpy as np
 import pandas as pd
 from batchgenerators.utilities.file_and_folder_operations import *
 
-from reg_nnUnet.imageio.base_reader_writer import BaseReaderWriter
-from reg_nnUnet.imageio.reader_writer_registry import determine_reader_writer_from_dataset_json
-from reg_nnUnet.paths import nnUNet_raw
+from TumorNetSolvers.reg_nnUnet.imageio.base_reader_writer import BaseReaderWriter
+from TumorNetSolvers.reg_nnUnet.imageio.reader_writer_registry import determine_reader_writer_from_dataset_json
+from TumorNetSolvers.reg_nnUnet.paths import nnUNet_raw
 #from reg_nnUnet.utilities.label_handling.target_handling import RegressionManager
-from reg_nnUnet.utilities.utils import get_identifiers_from_splitted_dataset_folder, \
+from TumorNetSolvers.reg_nnUnet.utilities.utils import get_identifiers_from_splitted_dataset_folder, \
     get_filenames_of_train_images_and_targets
 
 

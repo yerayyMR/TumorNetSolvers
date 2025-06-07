@@ -10,14 +10,14 @@ import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import *
 from tqdm import tqdm
 
-import reg_nnUnet
-from reg_nnUnet.paths import nnUNet_preprocessed, nnUNet_raw
-from reg_nnUnet.preprocessing.cropping.cropping import crop_to_nonzero
-from reg_nnUnet.preprocessing.resampling.default_resampling import compute_new_shape
-from reg_nnUnet.utilities.dataset_name_id_conversion import maybe_convert_to_dataset_name
-from reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
-from reg_nnUnet.utilities.plans_handling.plans_handler import PlansManager, ConfigurationManager
-from reg_nnUnet.utilities.utils import get_filenames_of_train_images_and_targets
+import TumorNetSolvers.reg_nnUnet as reg_nnUnet
+from TumorNetSolvers.reg_nnUnet.paths import nnUNet_preprocessed, nnUNet_raw
+from TumorNetSolvers.reg_nnUnet.preprocessing.cropping.cropping import crop_to_nonzero
+from TumorNetSolvers.reg_nnUnet.preprocessing.resampling.default_resampling import compute_new_shape
+from TumorNetSolvers.reg_nnUnet.utilities.dataset_name_id_conversion import maybe_convert_to_dataset_name
+from TumorNetSolvers.reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
+from TumorNetSolvers.reg_nnUnet.utilities.plans_handling.plans_handler import PlansManager, ConfigurationManager
+from TumorNetSolvers.reg_nnUnet.utilities.utils import get_filenames_of_train_images_and_targets
 
 
 class DefaultPreprocessor(object):
@@ -219,7 +219,7 @@ class DefaultPreprocessor(object):
             scheme = configuration_manager.normalization_schemes[c]
             normalizer_class = recursive_find_python_class(join(reg_nnUnet.__path__[0], "preprocessing", "normalization"),
                                                            scheme,
-                                                           'reg_nnUnet.preprocessing.normalization')
+                                                           'TumorNetSolvers.reg_nnUnet.preprocessing.normalization')
             if normalizer_class is None:
                 raise RuntimeError(f'Unable to locate class \'{scheme}\' for normalization')
             normalizer = normalizer_class(use_mask_for_norm=configuration_manager.use_mask_for_norm[c],

@@ -16,7 +16,7 @@
 
 from typing import Union
 
-from reg_nnUnet.paths import nnUNet_preprocessed, nnUNet_raw, nnUNet_results
+from TumorNetSolvers.reg_nnUnet.paths import nnUNet_preprocessed, nnUNet_raw, nnUNet_results
 from batchgenerators.utilities.file_and_folder_operations import *
 import numpy as np
 

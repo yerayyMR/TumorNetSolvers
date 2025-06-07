@@ -7,16 +7,16 @@ from typing import List, Type, Optional, Tuple, Union
 
 from batchgenerators.utilities.file_and_folder_operations import join, maybe_mkdir_p, load_json
 
-import reg_nnUnet
-from reg_nnUnet.configuration import default_num_processes
-from reg_nnUnet.experiment_planning.dataset_fingerprint.fingerprint_extractor import DatasetFingerprintExtractor
-from reg_nnUnet.experiment_planning.experiment_planners.default_experiment_planner import ExperimentPlanner
-from reg_nnUnet.experiment_planning.verify_dataset_integrity import verify_dataset_integrity
-from reg_nnUnet.paths import nnUNet_raw, nnUNet_preprocessed
-from reg_nnUnet.utilities.dataset_name_id_conversion import convert_id_to_dataset_name
-from reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
-from reg_nnUnet.utilities.plans_handling.plans_handler import PlansManager
-from reg_nnUnet.utilities.utils import get_filenames_of_train_images_and_targets
+import TumorNetSolvers.reg_nnUnet as reg_nnUnet
+from TumorNetSolvers.reg_nnUnet.configuration import default_num_processes
+from TumorNetSolvers.reg_nnUnet.experiment_planning.dataset_fingerprint.fingerprint_extractor import DatasetFingerprintExtractor
+from TumorNetSolvers.reg_nnUnet.experiment_planning.experiment_planners.default_experiment_planner import ExperimentPlanner
+from TumorNetSolvers.reg_nnUnet.experiment_planning.verify_dataset_integrity import verify_dataset_integrity
+from TumorNetSolvers.reg_nnUnet.paths import nnUNet_raw, nnUNet_preprocessed
+from TumorNetSolvers.reg_nnUnet.utilities.dataset_name_id_conversion import convert_id_to_dataset_name
+from TumorNetSolvers.reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
+from TumorNetSolvers.reg_nnUnet.utilities.plans_handling.plans_handler import PlansManager
+from TumorNetSolvers.reg_nnUnet.utilities.utils import get_filenames_of_train_images_and_targets
 
 
 def extract_fingerprint_dataset(dataset_id: int,
@@ -46,7 +46,7 @@ def extract_fingerprints(dataset_ids: List[int], fingerprint_extractor_class_nam
     """
     fingerprint_extractor_class = recursive_find_python_class(join(reg_nnUnet.__path__[0], "experiment_planning"),
                                                               fingerprint_extractor_class_name,
-                                                              current_module="reg_nnUnet.experiment_planning")
+                                                              current_module="TumorNetSolvers.reg_nnUnet.experiment_planning")
     for d in dataset_ids:
         extract_fingerprint_dataset(d, fingerprint_extractor_class, num_processes, check_dataset_integrity, clean,
                                     verbose)
@@ -92,7 +92,7 @@ def plan_experiments(dataset_ids: List[int], experiment_planner_class_name: str 
               "\n############################\n")
     experiment_planner = recursive_find_python_class(join(reg_nnUnet.__path__[0], "experiment_planning"),
                                                      experiment_planner_class_name,
-                                                     current_module="reg_nnUnet.experiment_planning")
+                                                     current_module="TumorNetSolvers.reg_nnUnet.experiment_planning")
     plans_identifier = None
     for d in dataset_ids:
         _, plans_identifier = plan_experiment_dataset(d, experiment_planner, gpu_memory_target_in_gb,

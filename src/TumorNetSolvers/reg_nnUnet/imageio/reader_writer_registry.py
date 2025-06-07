@@ -6,13 +6,13 @@ from typing import Type
 
 from batchgenerators.utilities.file_and_folder_operations import join
 
-import reg_nnUnet
-from reg_nnUnet.imageio.natural_image_reader_writer import NaturalImage2DIO
-from reg_nnUnet.imageio.nibabel_reader_writer import NibabelIO, NibabelIOWithReorient
-from reg_nnUnet.imageio.simpleitk_reader_writer import SimpleITKIO2
-from reg_nnUnet.imageio.tif_reader_writer import Tiff3DIO
-from reg_nnUnet.imageio.base_reader_writer import BaseReaderWriter
-from reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
+import TumorNetSolvers.reg_nnUnet as reg_nnUnet
+from TumorNetSolvers.reg_nnUnet.imageio.natural_image_reader_writer import NaturalImage2DIO
+from TumorNetSolvers.reg_nnUnet.imageio.nibabel_reader_writer import NibabelIO, NibabelIOWithReorient
+from TumorNetSolvers.reg_nnUnet.imageio.simpleitk_reader_writer import SimpleITKIO2
+from TumorNetSolvers.reg_nnUnet.imageio.tif_reader_writer import Tiff3DIO
+from TumorNetSolvers.reg_nnUnet.imageio.base_reader_writer import BaseReaderWriter
+from TumorNetSolvers.reg_nnUnet.utilities.find_class_by_name import recursive_find_python_class
 
 LIST_OF_IO_CLASSES = [
     NaturalImage2DIO,
@@ -74,7 +74,7 @@ def determine_reader_writer_from_file_ending(file_ending: str, example_file: str
 
 
 def recursive_find_reader_writer_by_name(rw_class_name: str) -> Type[BaseReaderWriter]:
-    ret = recursive_find_python_class(join(reg_nnUnet.__path__[0], "imageio"), rw_class_name, 'reg_nnUnet.imageio')
+    ret = recursive_find_python_class(join(reg_nnUnet.__path__[0], "imageio"), rw_class_name, 'TumorNetSolvers.reg_nnUnet.imageio')
     if ret is None:
         raise RuntimeError("Unable to find reader writer class '%s'. Please make sure this class is located in the "
                            "reg_nnUnet.imageio module." % rw_class_name)
