@@ -29,6 +29,13 @@
 #%%
 
 import os
+
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))  # scripts directory
+src_path = os.path.abspath(os.path.join(current_dir, '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
 import torch
 from set_env import set_environment_variables
 set_environment_variables()
@@ -39,12 +46,12 @@ print(nnUNet_preprocessed,nnUNet_raw,nnUNet_results)
 
 from TumorNetSolvers.preprocessing.data_preprocessor import preparingDataset, create_json_file
 
-from TumorNetSolvers.reg_nnUNet.utilities.dataset_name_id_conversion import (
+from TumorNetSolvers.reg_nnUnet.utilities.dataset_name_id_conversion import (
     find_candidate_datasets, maybe_convert_to_dataset_name
 )
-from TumorNetSolvers.reg_nnUNet.experiment_planning.dataset_fingerprint.fingerprint_extractor import DatasetFingerprintExtractor
-from TumorNetSolvers.reg_nnUNet.experiment_planning.plan_and_preprocess_api import (
-    plan_experiment_dataset, preprocess_dataset
+from TumorNetSolvers.reg_nnUnet.experiment_planning.dataset_fingerprint.fingerprint_extractor import DatasetFingerprintExtractor
+from TumorNetSolvers.reg_nnUnet.experiment_planning.plan_and_preprocess_api import (
+    plan_experiment_dataset, preprocess_dataset2
 )
 
 
@@ -53,7 +60,7 @@ from TumorNetSolvers.reg_nnUNet.experiment_planning.plan_and_preprocess_api impo
 # Configuration
 DATASET_ID = 500  # Must be in XXX format
 ANATOMICAL_STRUCTURE = "Brain"
-MOUNT_DIR = "/mnt/Drive3/jonas_zeineb/data_and_outputs"
+MOUNT_DIR = "/mnt/Drive3/yeray_jonas/TumorNetSolvers_ext/data_and_outputs"
 CROP_SIZE = 120  # Image crop size
 DOWNSAMPLE_SIZE = 64  # Downsample size
 PATIENT_RANGE = (0, 3)  # Patients to process (start, stop)
@@ -106,7 +113,7 @@ print(f"Experiment planned with identifier: {plan_identifier}")
 print("Preprocessing dataset...")
 #USE generate_masks=True if binary masks (GM-WM) are also needed (comparison with baseline),
 #else use preprocess_dataset 
-preprocess_dataset(DATASET_ID, num_processes=(8, 4, 8), generate_masks=False)
+preprocess_dataset2(DATASET_ID, num_processes=(8, 4, 8))#, generate_masks=False)
 print("Dataset preprocessing complete.")
 
 # ============ Summary ============
