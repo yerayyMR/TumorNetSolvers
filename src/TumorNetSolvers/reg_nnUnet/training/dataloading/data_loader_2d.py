@@ -6,8 +6,8 @@ import numpy as np
 import torch
 from threadpoolctl import threadpool_limits
 
-from reg_nnUnet.training.dataloading.base_data_loader import nnUNetDataLoaderBase
-from reg_nnUnet.training.dataloading.nnunet_dataset import nnUNetDataset
+from TumorNetSolvers.reg_nnUnet.training.dataloading.base_data_loader import nnUNetDataLoaderBase
+from TumorNetSolvers.reg_nnUnet.training.dataloading.nnunet_dataset import nnUNetDataset
 
 class nnUNetDataLoader2D(nnUNetDataLoaderBase):
     def generate_train_batch(self):
@@ -19,7 +19,7 @@ class nnUNetDataLoader2D(nnUNetDataLoaderBase):
 
         for j, current_key in enumerate(selected_keys):
             # Load data and segmentation
-            data, seg, properties = self._data.load_case(current_key)
+            data, _, _, seg, properties = self._data.load_case(current_key)
             case_properties.append(properties)
 
             # Determine whether to oversample foreground (not applicable for regression, hence False)
