@@ -235,7 +235,7 @@ def preparingDataset(id, mount_dir, anatomical_struct="Brain", start=0, stop=9, 
     """
         
     datasetPath = "/mnt/Drive4/jonas/datasets/synthetic_FK_Michals_solver_smaller/"
-    atlasTissue = nib.load("/home/home/jonas_zeineb/Forschungspraxis/DTIAtlas/sub-mni152_tissues_space-sri.nii.gz")
+    atlasTissue = nib.load("/home/home/yeray_jonas/tumornetsolvers/sub-mni152_tissues_space-sri.nii.gz")
     patients = np.sort(os.listdir(datasetPath))
 
     if start < 0:
