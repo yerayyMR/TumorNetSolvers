@@ -30,7 +30,7 @@ nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
 # ============ Configuration ============
 
 # Define the dataset and training configuration
-DATASET_NAME = 'Dataset500_Brain'  
+DATASET_NAME = 'Dataset700_Brain'  
 TRAINING_CONFIGURATION = '3d_fullres'  # '2d', '3d_lowres', '3d_fullres', etc.
 DEVICE = torch.device('cuda:0')  
 
@@ -38,6 +38,9 @@ DEVICE = torch.device('cuda:0')
 PROJECT_NAME = "NN-based-tumor-solvers"  # for wandb
 MODEL_NAME = "nnUnet"  # other options are 'TumorSurrogate' and 'ViT'
 SIGNATURE = "10k"  # Unique signature for logging and reproducibility
+
+# Define experiments regarding insertion of parameters (mode and location)
+EXPERIMENTS = [['a', 'b_bottleneck'], ['c', 'b_bottleneck']]
 
 # ============ Load Training Plans and Dataset ============
 
@@ -60,9 +63,11 @@ trainer = Trainer(
     configuration=TRAINING_CONFIGURATION,
     device=DEVICE,
     signature=SIGNATURE,
+    fold='train_val_test',
     model=MODEL_NAME,
     dataset_json=dataset_json,
-    project_name=PROJECT_NAME
+    project_name=PROJECT_NAME,
+    experiments = EXPERIMENTS
 )
 
 # Run the training process
