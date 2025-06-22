@@ -32,13 +32,13 @@ def main():
     nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
     nnUNet_results= os.getenv('nnUNet_results')
     # ============ Configuration ============
-    DATASET_NAME = 'Dataset500_Brain'  # Specify the dataset name
+    DATASET_NAME = 'Dataset700_Brain'  # Specify the dataset name
     MODELS = ['nnUnet']  # Models to use for inference e.g. ['ViT', 'nnUnet', 'TumorSurrogate']
     DEVICE = torch.device('cuda:0')  
 
     # Paths
     DATA_FOLDER = os.path.join(nnUNet_preprocessed, DATASET_NAME,"nnUNetPlans_3d_fullres")
-    OUTPUT_BASE = os.path.join(nnUNet_results, DATASET_NAME, 'preds')
+    OUTPUT_BASE = os.path.join(nnUNet_results, DATASET_NAME, 'init_1k_0.5_coeff', 'preds')
     SIGNATURE='10k'
 
     # ============ Run Inference ============
@@ -49,7 +49,8 @@ def main():
         data_folder=DATA_FOLDER,
         output_base=OUTPUT_BASE,
         device=DEVICE,
-        signature=SIGNATURE
+        signature=SIGNATURE,
+        chkpt="/mnt/Drive3/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/Dataset700_Brain/Trainer__nnUNetPlans__3d_fullres/fold_2/_10k_nnUnet/init_1k/checkpoint_nnUnet_best_ema_dice.pth"
     )
     print("Inference complete. Results saved to output directory.")
 
