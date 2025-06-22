@@ -1,0 +1,32 @@
+{
+  "os":  "Linux-5.13.0-39-generic-x86_64-with-glibc2.31",
+  "python":  "3.10.16",
+  "startedAt":  "2025-06-17T09:44:29.419983Z",
+  "program":  "/home/home/yeray_jonas/tumornetsolvers/scripts/predict_tumor_params.py",
+  "codePath":  "scripts/predict_tumor_params.py",
+  "git":  {
+    "remote":  "https://github.com/yerayyMR/TumorNetSolvers.git",
+    "commit":  "dee911cb802b8dbfdae9483fce4d1ad731e98cfc"
+  },
+  "email":  "yeray.martin-ruisanchez@tum.de",
+  "root":  "/home/home/yeray_jonas/tumornetsolvers/scripts",
+  "host":  "ibbm-giga",
+  "username":  "yeray_jonas",
+  "executable":  "/home/home/yeray_jonas/anaconda3/envs/tumor_env/bin/python",
+  "codePathLocal":  "predict_tumor_params.py",
+  "cpu_count":  64,
+  "cpu_count_logical":  128,
+  "disk":  {
+    "/":  {
+      "total":  "1014468431872",
+      "used":  "877458284544"
+    }
+  },
+  "memory":  {
+    "total":  "540866064384"
+  },
+  "cpu":  {
+    "count":  64,
+    "countLogical":  128
+  }
+}

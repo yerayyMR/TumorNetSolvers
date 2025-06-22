@@ -1,0 +1,12 @@
+[
+    {
+        "test": [
+            "BRAIN_p3"
+        ],
+        "train": [
+            "BRAIN_p1",
+            "BRAIN_p2"
+        ],
+        "val": []
+    }
+]
