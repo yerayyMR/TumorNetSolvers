@@ -6,6 +6,8 @@ import shutil
 from copy import deepcopy
 from typing import List, Union, Tuple
 
+import nibabel as nib
+
 import numpy as np
 import torch
 from batchgenerators.utilities.file_and_folder_operations import load_json, join, save_json, isfile, maybe_mkdir_p
@@ -99,6 +101,7 @@ class ExperimentPlanner(object):
     def static_estimate_VRAM_usage(patch_size: Tuple[int],
                                    input_channels: int,
                                    output_channels: int,
+                                   shape_data: torch.Size,
                                    arch_class_name: str,
                                    arch_kwargs: dict,
                                    arch_kwargs_req_import: Tuple[str, ...]):
@@ -110,6 +113,7 @@ class ExperimentPlanner(object):
         # print(f'instantiating network, patch size {patch_size}, pool op: {arch_kwargs["strides"]}')
         net = get_network_from_plans_new(arch_class_name, arch_kwargs, arch_kwargs_req_import, input_channels,
                                      output_channels,
+                                     inputs_shape=shape_data,
                                      allow_init=False)
         ret = net.compute_conv_feature_map_size(patch_size)
         torch.set_num_threads(a)
@@ -302,6 +306,11 @@ class ExperimentPlanner(object):
             '_kw_requires_import': ('conv_op', 'norm_op', 'dropout_op', 'nonlin'),
         }
 
+        # Dummy load of the data in order to obtain the shape of the input required to implement the experiments on the definition of the NN
+        dummy_example = nib.load(self.dataset['BRAIN_p1']['images'][0]).get_fdata()
+        shape_data = dummy_example.shape
+        shape_data = torch.Size(shape_data)
+
         # now estimate vram consumption
         if _keygen(patch_size, pool_op_kernel_sizes) in _cache.keys():
             estimate = _cache[_keygen(patch_size, pool_op_kernel_sizes)]
@@ -309,6 +318,7 @@ class ExperimentPlanner(object):
             estimate = self.static_estimate_VRAM_usage(patch_size,
                                                        num_input_channels,
                                                        1,
+                                                       shape_data,
                                                        architecture_kwargs['network_class_name'],
                                                        architecture_kwargs['arch_kwargs'],
                                                        architecture_kwargs['_kw_requires_import'],
