@@ -58,12 +58,12 @@ from TumorNetSolvers.reg_nnUnet.experiment_planning.plan_and_preprocess_api impo
 
 # ============ Data Preparation ============
 # Configuration
-DATASET_ID = 500  # Must be in XXX format
+DATASET_ID = 700  # Must be in XXX format
 ANATOMICAL_STRUCTURE = "Brain"
 MOUNT_DIR = "/mnt/Drive3/yeray_jonas/TumorNetSolvers_ext/data_and_outputs"
 CROP_SIZE = 120  # Image crop size
 DOWNSAMPLE_SIZE = 64  # Downsample size
-PATIENT_RANGE = (0, 3)  # Patients to process (start, stop)
+PATIENT_RANGE = (0, 1000)  # Patients to process (start, stop)
 
 # Ensure required directories exist
 for sub_dir in ['raw_data', 'preprocessed_data', 'results']:
