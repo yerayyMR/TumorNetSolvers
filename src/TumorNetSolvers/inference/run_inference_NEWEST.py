@@ -45,6 +45,8 @@ def run_inference(dataset_name: str, models: list, data_folder: str, output_base
     dataset = CustomDataset(data_folder, test_keys)
     data_loader = DataLoader(dataset, batch_size=5, shuffle=False)
     os.makedirs(output_base, exist_ok=True)
+    # Obtain the shape of the input
+    shape_data = dataset[0][0].shape # First [0] gets the sample tuple, second [0] extracts the image (data['data']) from it
     # Create output directories for each model
     for model_name in models:
         os.makedirs(os.path.join(output_base, f"_{model_name}_{signature}/masked"), exist_ok=True)
@@ -57,7 +59,7 @@ def run_inference(dataset_name: str, models: list, data_folder: str, output_base
     # Perform inference for each model
     for model_name in models:
         # Initialize trainer and load model checkpoint
-        infer_manager = InferenceManager(plan, configuration='3d_fullres', model=model_name, device=device, dataset_json=dataset_json)#, signature=signature)
+        infer_manager = InferenceManager(plan, configuration='3d_fullres', model=model_name, device=device, dataset_json=dataset_json, shape_data=shape_data)#, signature=signature)
 
         # Construct the checkpoint path
         if chkpt and os.path.exists(chkpt):
@@ -88,6 +90,7 @@ def run_inference(dataset_name: str, models: list, data_folder: str, output_base
                 # Gather model parameters and perform inference
                 batch_params = [parameters[key] for key in keys]
                 batch_params = torch.stack(batch_params).to(device)
+                #batch_params /= 2
                 output = model(data, batch_params)
 
                 # Apply deep supervision if enabled
