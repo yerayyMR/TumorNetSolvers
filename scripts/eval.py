@@ -21,6 +21,13 @@ Outputs:
 """
 # %% Performance Evaluation and Statistical Analysis
 import os
+
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))  # scripts directory
+src_path = os.path.abspath(os.path.join(current_dir, '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
 from set_env import set_environment_variables
 from TumorNetSolvers.evaluation.eval_preds_folder import compute_metrics
 from TumorNetSolvers.evaluation.file_io import save_results_to_json
@@ -38,7 +45,7 @@ SIGNATURE = '10k'
 MASKED = False  # Binary flag for masked evaluation
 
 # Define output directory for performance summaries
-summary_dir = os.path.join("performance_summaries")
+summary_dir = os.path.join("performance_summaries", "init")
 os.makedirs(summary_dir, exist_ok=True)
 
 # Determine ground truth folder
@@ -53,9 +60,9 @@ else:
 for MODEL in MODELS:
     # Determine predictions folder
     if MASKED:
-        PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, 'preds', f'_{MODEL}_{SIGNATURE}/masked')
+        PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, 'init', 'preds', f'_{MODEL}_{SIGNATURE}/masked')
     else:
-        PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
+        PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, 'init', 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
 
     # Validate folders
     if not os.path.exists(PREDS_FOLDER):
