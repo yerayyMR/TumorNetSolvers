@@ -26,9 +26,16 @@ Example usage:
 #%%
 import os
 import time
+import sys
 
 from set_env import set_environment_variables
 set_environment_variables()
+
+current_dir = os.path.dirname(os.path.abspath(__file__))  # scripts directory
+src_path = os.path.abspath(os.path.join(current_dir, '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
 
 import torch
 import torch.nn.functional as F
@@ -85,13 +92,15 @@ def infer_parameters(dataset_name: str, model: str, data_folder: str, output_bas
     dataset = CustomDataset(data_folder, test_keys)
     data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
     os.makedirs(output_base, exist_ok=True)
-
+    # Obtain the shape of the input
+    shape_data = dataset[0][0].shape # First [0] gets the sample tuple, second [0] extracts the image (data['data']) from it
+    
     # Create output directories
     output_folder = os.path.join(output_base, f"_{model}_{signature}")
     os.makedirs(os.path.join(output_folder, "optimizeOutputPatients"), exist_ok=True)
 
     # Initialize InferenceManager and load checkpoint
-    infer_manager = InferenceManager(plan, configuration='3d_fullres', model=model, device=device, dataset_json=dataset_json)
+    infer_manager = InferenceManager(plan, configuration='3d_fullres', model=model, device=device, dataset_json=dataset_json, shape_data=shape_data)
     
     if chkpt and os.path.exists(chkpt):
         checkpoint_path = chkpt
@@ -122,129 +131,131 @@ def infer_parameters(dataset_name: str, model: str, data_folder: str, output_bas
         else:
             raise ValueError("Unexpected batch structure")
 
-        filter= lambda x : (x>0)*x
-        target = filter(target)
-        data = data.to(device, non_blocking=True)
-        if mask is not None:
-            mask = mask.to(device)
+        if keys[0] == 'BRAIN_p1':
+            filter= lambda x : (x>0)*x
+            target = filter(target)
+            data = data.to(device, non_blocking=True)
+            if mask is not None:
+                mask = mask.to(device)
 
-        batch_params = [parameters[key] for key in keys]
-        batch_params = torch.stack(batch_params).to(device)
-        
-        # Initialize optimization
-        params = batch_params.clone()
-        params.requires_grad = True
-        optimizer = optim.Adam([params], lr=0.01)
-
-        # Detailed logging dictionary
-        saveDict = {
-            "patientName": keys[0],
-            "logDicts": [],
-            "wandbRunID": None,
-            "runtime": 0
-        }
-
-        for step in range(200):
-            optimizer.zero_grad()
-            output = filter(model_network(data, params)[0]) if isinstance(model_network(data, params),list) else filter(model_network(data, params)) #handle deep supervision
-
-            # Masking
-            if mask:
-                output = output * mask.to(device)
+            batch_params = [parameters[key] for key in keys]
+            batch_params = torch.stack(batch_params).to(device)
+            #batch_params[:] = 0
             
-            output_continuous = output.clone().detach().to(device)
+            # Initialize optimization
+            params = batch_params.clone()
+            params.requires_grad = True
+            optimizer = optim.Adam([params], lr=0.01)
 
-            # Apply thresholding
-            thresholded_output = cont_function(output, low=0.25, high=0.675).to(device)
-            loss = F.mse_loss(thresholded_output, target.to(device))
-            grad_parameters, = autograd.grad(loss, params, retain_graph=True)
-            
-            loss.backward()
-            optimizer.step()
-
-            # Logging
-            logDict = {
-                "_loss": loss.item(),
-                "_grad_parameters_mean": grad_parameters.mean().item()
+            # Detailed logging dictionary
+            saveDict = {
+                "patientName": keys[0],
+                "logDicts": [],
+                "wandbRunID": None,
+                "runtime": 0
             }
 
-            # Parameter tracking
-            labels = ["x", "y", "z", "muD", "muRho"]
-            parameter_diff = params - batch_params
-            for j in range(5):
-                logDict[f"grad_parameters_{labels[j]}"] = grad_parameters[0,j].item()
-                logDict[f"parameters_{labels[j]}"] = params[0,j].item()
-                logDict[f"parameters_difference_{labels[j]}"] = parameter_diff[0,j].item()
-            logDict["_parameters_difference_mean"] = parameter_diff.abs().mean().item()
+            for step in range(200):
+                optimizer.zero_grad()
+                output = filter(model_network(data, params)[0]) if isinstance(model_network(data, params),list) else filter(model_network(data, params)) #handle deep supervision
 
-            # Dice score calculation
-            thresholds = np.linspace(0.1, 0.9, 9).tolist() + [0.24, 0.665]
-            for threshold in thresholds:
-                dice = compute_dice_score(output_continuous, target.to(device), threshold=threshold)
-                logDict[f"dice_{round(threshold, 2)}"] = dice.item()
+                # Masking
+                if 'mask' in locals() or 'mask' in globals():
+                    output = output * mask.to(device)
+                
+                output_continuous = output.clone().detach().to(device)
 
-            wandb.log(logDict)
-            saveDict["logDicts"].append(logDict)
+                # Apply thresholding
+                thresholded_output = cont_function(output, low=0.25, high=0.675).to(device)
+                loss = F.mse_loss(thresholded_output, target.to(device))
+                grad_parameters, = autograd.grad(loss, params, retain_graph=True)
+                
+                loss.backward()
+                optimizer.step()
 
-            # Visualization (every 20 steps)
-            if step % 20 == 0 or step == 0:
-                fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-                slice= target.shape[-1]//2
-                # Input tissue
-                axes[0].imshow(data.cpu().detach().numpy()[0,0,:,:,slice], cmap='gray')
-                pred_plot = thresholded_output.cpu().detach().numpy()[0,0,:,:,slice]
-                axes[0].imshow(pred_plot, vmin=0, vmax=1, cmap='Blues', alpha=pred_plot)
-                axes[0].set_title(f'Step {step}: Prediction')
+                # Logging
+                logDict = {
+                    "_loss": loss.item(),
+                    "_grad_parameters_mean": grad_parameters.mean().item()
+                }
 
-                # Ground truth
-                axes[1].imshow(data.cpu().detach().numpy()[0,0,:,:,slice], cmap='gray')
+                # Parameter tracking
+                labels = ["x", "y", "z", "muD", "muRho"]
+                parameter_diff = params - batch_params
+                for j in range(5):
+                    logDict[f"grad_parameters_{labels[j]}"] = grad_parameters[0,j].item()
+                    logDict[f"parameters_{labels[j]}"] = params[0,j].item()
+                    logDict[f"parameters_difference_{labels[j]}"] = parameter_diff[0,j].item()
+                logDict["_parameters_difference_mean"] = parameter_diff.abs().mean().item()
 
-                gt_plot = target.cpu().detach().numpy()[0,0,:,:,slice]
-                axes[1].imshow(gt_plot, vmin=0, vmax=1, cmap='Greens', alpha=gt_plot)
-                axes[1].set_title(f'Step {step}: Ground Truth')
+                # Dice score calculation
+                thresholds = np.linspace(0.1, 0.9, 9).tolist() + [0.24, 0.665]
+                for threshold in thresholds:
+                    dice = compute_dice_score(output_continuous, target.to(device), threshold=threshold)
+                    logDict[f"dice_{round(threshold, 2)}"] = dice.item()
 
-                # Difference
-                axes[2].imshow(data.cpu().detach().numpy()[0,0,:,:,slice], cmap='gray')
-                diff_plot = np.abs(pred_plot - gt_plot)
-                axes[2].imshow(diff_plot, vmin=0, vmax=1, cmap='Reds', alpha=diff_plot)
-                axes[2].set_title(f'Step {step}: Difference')
+                wandb.log(logDict)
+                saveDict["logDicts"].append(logDict)
 
-                plt.tight_layout()
-                save_path = os.path.join(output_folder, "optimizeOutputPatients", keys[0])
-                os.makedirs(save_path, exist_ok=True)
-                plt.savefig(os.path.join(save_path, f"step{step}.pdf"))
-                plt.close()
+                # Visualization (every 20 steps)
+                if step % 20 == 0 or step == 0:
+                    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+                    slice= target.shape[-1]//2
+                    # Input tissue
+                    axes[0].imshow(data.cpu().detach().numpy()[0,0,:,:,slice], cmap='gray')
+                    pred_plot = thresholded_output.cpu().detach().numpy()[0,0,:,:,slice]
+                    axes[0].imshow(pred_plot, vmin=0, vmax=1, cmap='Blues', alpha=0.5)
+                    axes[0].set_title(f'Step {step}: Prediction')
 
-        # Save outputs
-        case_n = keys[0]
-        save_path = os.path.join(output_folder, "optimizeOutputPatients", case_n)
-        os.makedirs(save_path, exist_ok=True)
+                    # Ground truth
+                    axes[1].imshow(data.cpu().detach().numpy()[0,0,:,:,slice], cmap='gray')
 
-        save_nifti(data[0, 0], save_path, 'input_tissue')
-        save_nifti(output[0, 0].detach(), save_path, 'prediction_masked')
-        save_nifti(target[0, 0], save_path, 'output_ground_truth')
-        save_nifti(thresholded_output[0, 0].detach(), save_path, 'prediction_thresholded')
+                    gt_plot = target.cpu().detach().numpy()[0,0,:,:,slice]
+                    axes[1].imshow(gt_plot, vmin=0, vmax=1, cmap='Greens', alpha=0.5)
+                    axes[1].set_title(f'Step {step}: Ground Truth')
 
-        # Finalize logging
-        saveDict["wandbRunID"] = wandb.run.id
-        saveDict["runtime"] = time.time() - runtimeStart
-        torch.save(saveDict, os.path.join(save_path, "logDict.pth"))
+                    # Difference
+                    axes[2].imshow(data.cpu().detach().numpy()[0,0,:,:,slice], cmap='gray')
+                    diff_plot = np.abs(pred_plot - gt_plot)
+                    axes[2].imshow(diff_plot, vmin=0, vmax=1, cmap='Reds', alpha=0.5)
+                    axes[2].set_title(f'Step {step}: Difference')
 
-        wandb.save(os.path.join(save_path, "logDict.pth"))
-        wandb.finish()
-        break 
+                    plt.tight_layout()
+                    save_path = os.path.join(output_folder, "optimizeOutputPatients", keys[0])
+                    os.makedirs(save_path, exist_ok=True)
+                    plt.savefig(os.path.join(save_path, f"step{step}.pdf"))
+                    plt.close()
+
+            # Save outputs
+            case_n = keys[0]
+            save_path = os.path.join(output_folder, "optimizeOutputPatients", case_n)
+            os.makedirs(save_path, exist_ok=True)
+
+            save_nifti(data[0, 0], save_path, 'input_tissue')
+            save_nifti(output[0, 0].detach(), save_path, 'prediction_masked')
+            save_nifti(target[0, 0], save_path, 'output_ground_truth')
+            save_nifti(thresholded_output[0, 0].detach(), save_path, 'prediction_thresholded')
+
+            # Finalize logging
+            saveDict["wandbRunID"] = wandb.run.id
+            saveDict["runtime"] = time.time() - runtimeStart
+            torch.save(saveDict, os.path.join(save_path, "logDict.pth"))
+
+            wandb.save(os.path.join(save_path, "logDict.pth"))
+            wandb.finish()
+            break 
 
 
 if __name__=="__main__":
-    DATASET_NAME = "Dataset500_Brain"
+    DATASET_NAME = "Dataset700_Brain"
     MODEL = "nnUnet"  # Can also be 'ViT' or 'TumorSurrogate'
     DATA_FOLDER = os.path.join(nnUNet_preprocessed, DATASET_NAME,"nnUNetPlans_3d_fullres")
-    OUTPUT_BASE = os.path.join(nnUNet_results, DATASET_NAME, 'infer_params')
+    OUTPUT_BASE = os.path.join(nnUNet_results, DATASET_NAME, 'init_1k_0_coeff', 'infer_params')
     
    
     DEVICE = torch.device('cuda:0')
     SIGNATURE = "experiment"  # Or any other identifier for your experiment
-    CHECKPOINT= "/mnt/Drive3/jonas_zeineb/data_and_outputs/results/Dataset700_Brain/Trainer__nnUNetPlans__3d_fullres/fold_train_val/_10k_2_nnUnet/checkpoint_nnUnet_best_ema_dice.pth"  #inputting checkpoint is optional, else it will look for checkpoint correspoding to same dataset and model (ie look for checkpoint for _nnUnet under results/dataset500_Brain folder)
+    CHECKPOINT= "/mnt/Drive3/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/Dataset700_Brain/Trainer__nnUNetPlans__3d_fullres/fold_2/_10k_nnUnet/init_1k/checkpoint_nnUnet_best_ema_dice.pth"  #inputting checkpoint is optional, else it will look for checkpoint correspoding to same dataset and model (ie look for checkpoint for _nnUnet under results/dataset500_Brain folder)
     infer_parameters(DATASET_NAME, MODEL, DATA_FOLDER, OUTPUT_BASE, DEVICE, SIGNATURE, chkpt=CHECKPOINT)
 
 
