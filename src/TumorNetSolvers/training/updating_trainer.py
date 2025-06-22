@@ -43,6 +43,7 @@ from TumorNetSolvers.reg_nnUnet.utilities.collate_outputs import collate_outputs
 from TumorNetSolvers.reg_nnUnet.utilities.helpers import empty_cache, dummy_context
 from TumorNetSolvers.reg_nnUnet.utilities.plans_handling.plans_handler import PlansManager
 from TumorNetSolvers.reg_nnUnet.configuration import ANISO_THRESHOLD
+from TumorNetSolvers.reg_nnUnet.utilities.crossval_split import generate_crossval_split
 
 
 from batchgenerators.utilities.file_and_folder_operations import join, maybe_mkdir_p, save_json, isfile, load_json
@@ -54,6 +55,7 @@ from batchgeneratorsv2.transforms.utils.nnunet_masking import MaskImageTransform
 from batchgeneratorsv2.transforms.utils.compose import ComposeTransforms
 from batchgeneratorsv2.transforms.utils.deep_supervision_downsampling import DownsampleSegForDSTransform
 from batchgeneratorsv2.helpers.scalar_type import RandomScalar
+
 from TumorNetSolvers.utils.paths import set_environment_variables
 set_environment_variables()
 nnUNet_preprocessed = os.environ.get('nnUNet_preprocessed')
@@ -73,7 +75,7 @@ def init_weights(layer):
 
 class Trainer(object):
     def __init__(self, plans: dict, configuration: str, dataset_json: dict, signature:str, fold: Union[Literal['train_val', 'all'], int]= "train_val",  unpack_dataset: bool = True, loss_func: Literal['mse', 'mae']= 'mse', model: Literal['nnUnet', 'ViT', 'TumorSurrogate']= "ViT",
-                 device: torch.device = torch.device(f'cuda:5'), project_name="NN-based-tumor-solvers"):
+                 device: torch.device = torch.device(f'cuda:5'), project_name="NN-based-tumor-solvers", experiments = [['c', 'a_bottleneck']]):
         self.signature=signature #Must Be Defined!!
         self.enable_deep_supervision = False
         self.model= model
@@ -83,6 +85,9 @@ class Trainer(object):
         self.device = device
         self.loss_fn= loss_func
         self.mask= nn.ReLU()
+
+        # Experiments
+        self.experiments = experiments
 
         # print what device we are using
         if self.is_ddp:  # implicitly it's clear that we use cuda in this case
@@ -120,7 +125,9 @@ class Trainer(object):
         self.output_folder_base = join(nnUNet_results, self.plans_manager.dataset_name,
                                        self.__class__.__name__ + '__' + self.plans_manager.plans_name + "__" + configuration) \
             if nnUNet_results is not None else None
-        self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}')
+        self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', 'forward_1k')
+
+        self.output_folder_models = join(self.output_folder, 'models_extra')
 
         self.preprocessed_dataset_folder = join(self.preprocessed_dataset_folder_base,
                                                 self.configuration_manager.data_identifier)
@@ -134,7 +141,6 @@ class Trainer(object):
         self.num_val_iterations_per_epoch = 100
         self.num_epochs = 1000
         self.current_epoch = 0
-
         self.num_input_channels = None  # -> self.initialize()
         
         if self.model=="ViT":
@@ -154,10 +160,13 @@ class Trainer(object):
         self.optimizer = self.lr_scheduler = None  # -> self.initialize
         self.grad_scaler = GradScaler() if self.device.type == 'cuda' else None
         self.loss = None  # -> self.initialize
+        self.stop_training = False # Boolean to stop training if convergence or overfitting is detected
+        self.early_stop_patience = 10
 
         # logging
         timestamp = datetime.now()
         maybe_mkdir_p(self.output_folder)
+        maybe_mkdir_p(self.output_folder_models)
         self.log_file = join(self.output_folder, "training_log_%d_%d_%d_%02.0d_%02.0d_%02.0d.txt" %
                              (timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute,
                               timestamp.second))
@@ -172,11 +181,18 @@ class Trainer(object):
         self._best_val_loss= None
         self.dice_ema = EMA(alpha=0.1)
         self.loss_ema = EMA(alpha=0.1)
+
+        #Early stopping
+        self._best_es_val_loss = None
+        self._best_es_val_dice = None
+        self._best_es_val_ssim = None
+        self._best_es_ema_loss = None
+        self._best_es_ema_dice = None
         ### inference things
         self.inference_allowed_mirroring_axes = None  # ->self.configure_rotation_dummyDA_mirroring_and_inital_patch_size  (will be saved in checkpoints)
 
         ### checkpoint saving 
-        self.save_every = 50
+        self.save_every = 10
         self.disable_checkpointing = False
 
         ## DDP batch size and oversampling can differ between workers and needs adaptation
@@ -215,7 +231,8 @@ class Trainer(object):
 
             self.was_initialized = True
             self.gradients = {}
-            self.register_hooks()
+            #self.register_hooks()
+            self.register_param_hooks()
         else:
             raise RuntimeError("You have called self.initialize even though the trainer was already initialized. "
                                "That should not happen.")
@@ -245,8 +262,7 @@ class Trainer(object):
             return True
         else:
             return os.environ['nnUNet_compile'].lower() in ('true', '1', 't')
-        
-    
+
     def _save_debug_information(self):
         # saving some debug information
         if self.local_rank == 0:
@@ -294,6 +310,7 @@ class Trainer(object):
             arch_kwargs_req_import=arch_init_kwargs_req_import,
             input_channels=num_input_channels,
             output_channels=num_output_channels,
+            inputs_shape=self.shape_data,
             allow_init=True,
             deep_supervision=enable_deep_supervision
         )
@@ -523,7 +540,12 @@ class Trainer(object):
         dataset = nnUNetDataset(self.preprocessed_dataset_folder, case_identifiers=None,
                                 param_file=self.param_file, num_images_properties_loading_threshold=0)
 
-        if self.fold == "train_val":
+        if self.fold == "all":
+            # if fold==all then we use all images for training and validation
+            case_identifiers = get_case_identifiers(self.preprocessed_dataset_folder)
+            tr_keys = case_identifiers
+            val_keys = tr_keys
+        elif self.fold == "train_val":
             all_keys_sorted = sorted(dataset.keys())
             print(splits_file)
             splits_f=load_json(splits_file)
@@ -538,6 +560,86 @@ class Trainer(object):
             splits[-1]['test'] = list(test_keys)
             save_json(splits, splits_file)
             self.print_to_log_file(f"Train-Validation-Test Split: {len(tr_keys)} training cases, {len(val_keys)} validation cases, and  {len(test_keys)} test cases .")
+        elif self.fold == "train_val_test":
+            splits_file = join(self.preprocessed_dataset_folder_base, "splits_final.json")
+            if not isfile(splits_file):
+                raise RuntimeError("splits_final.json does not exist. Run training once to generate it.")
+            
+            splits = load_json(splits_file)
+            default_fold = 2  # You can make this configurable if desired
+            if 'train' in splits[default_fold] and 'val' in splits[default_fold] and 'test' in splits[default_fold]:
+                tr_keys = splits[default_fold]['train']
+                val_keys = splits[default_fold]['val']
+                test_keys = splits[default_fold]['test']
+                self.print_to_log_file(f"Using pre-generated split from file: {splits_file}")
+                self.print_to_log_file(f"Train/Val/Test sizes: {len(tr_keys)} / {len(val_keys)} / {len(test_keys)}")
+            else:
+                raise ValueError(f"Split {default_fold} in {splits_file} does not contain train/val/test keys.")
+        else:
+            splits_file = join(self.preprocessed_dataset_folder_base, "splits_final.json")
+            dataset = nnUNetDataset(self.preprocessed_dataset_folder, case_identifiers=None,
+                                    param_file=self.param_file,
+                                    num_images_properties_loading_threshold=0)
+
+            self.print_to_log_file("Creating (and overwriting) 5-fold train/val/test cross-validation split...")
+            all_keys_sorted = list(np.sort(list(dataset.keys())))
+
+            from sklearn.model_selection import KFold
+            kf = KFold(n_splits=5, shuffle=True, random_state=12345)
+            all_folds = list(kf.split(all_keys_sorted))
+            splits = []
+
+            for fold in range(5):
+                test_idx = fold
+                val_idx = (fold + 1) % 5
+                train_idx = [i for i in range(5) if i != test_idx and i != val_idx]
+
+                test_cases = [all_keys_sorted[i] for i in all_folds[test_idx][1]]
+                val_cases = [all_keys_sorted[i] for i in all_folds[val_idx][1]]
+                train_cases = []
+                for i in train_idx:
+                    train_cases += [all_keys_sorted[j] for j in all_folds[i][1]]
+
+                splits.append({
+                    'train': train_cases,
+                    'val': val_cases,
+                    'test': test_cases
+                })
+
+            save_json(splits, splits_file)
+
+            self.print_to_log_file("Using freshly created splits from file:", splits_file)
+            splits = load_json(splits_file)
+            self.print_to_log_file(f"The split file now contains {len(splits)} splits.")
+
+            self.print_to_log_file("Desired fold for training: %d" % self.fold)
+            if self.fold < len(splits):
+                tr_keys = splits[self.fold]['train']
+                val_keys = splits[self.fold]['val']
+                test_keys = splits[self.fold]['test']
+                self.print_to_log_file("This split has %d training, %d validation, and %d test cases."
+                                    % (len(tr_keys), len(val_keys), len(test_keys)))
+            else:
+                self.print_to_log_file("INFO: You requested fold %d for training but splits "
+                                    "contain only %d folds. Creating a random (seeded) 80:20 split."
+                                    % (self.fold, len(splits)))
+                rnd = np.random.RandomState(seed=12345 + self.fold)
+                keys = np.sort(list(dataset.keys()))
+                idx_tr = rnd.choice(len(keys), int(len(keys) * 0.8), replace=False)
+                idx_val = [i for i in range(len(keys)) if i not in idx_tr]
+                tr_keys = [keys[i] for i in idx_tr]
+                val_keys = [keys[i] for i in idx_val]
+                test_keys = []
+                self.print_to_log_file("This random 80:20 split has %d training and %d validation cases."
+                                    % (len(tr_keys), len(val_keys)))
+
+            if any([i in val_keys for i in tr_keys]):
+                self.print_to_log_file('WARNING: Some validation cases are also in the training set. Please check the '
+                                    'splits.json or ignore if this is intentional.')
+
+
+
+        
         
         return tr_keys, val_keys, test_keys
 
@@ -640,9 +742,12 @@ class Trainer(object):
                                                     pin_memory=self.device.type == 'cuda',
                                                     wait_time=0.002)
         # Initialize the data generators
-        _ = next(mt_gen_train)
+        init_mt_gen_train = next(mt_gen_train)
         _ = next(mt_gen_val)
-        return mt_gen_train, mt_gen_val
+
+        # Obtain the shape of data
+        shape_data = init_mt_gen_train['data'].shape # Both are the same
+        return mt_gen_train, mt_gen_val, shape_data
 
 
     @staticmethod
@@ -700,7 +805,7 @@ class Trainer(object):
     def on_train_start(self):
         # dataloaders must be instantiated here (instead of __init__) because they need access to the training data
         # which may not be present when doing inference
-        self.dataloader_train, self.dataloader_val = self.get_dataloaders()
+        self.dataloader_train, self.dataloader_val, self.shape_data = self.get_dataloaders()
 
         if not self.was_initialized:
             self.initialize()
@@ -814,6 +919,12 @@ class Trainer(object):
             self.optimizer.step()
             self.lr_scheduler.step()
             
+        if hasattr(self.network, 'param_fc'):
+            linear_weights = self.network.param_fc.weight.detach().cpu()
+            linear_bias = self.network.param_fc.bias.detach().cpu()
+        else:
+            print("Parameters have no weights updated")
+        
         wandb.log({
             f'train_{self.loss_fn}': l.item(),
             'train_dice': d.item(), 'train_ssim': ssim.item() }, step=self.global_step)
@@ -946,6 +1057,7 @@ class Trainer(object):
         current_epoch = self.current_epoch
         if (current_epoch + 1) % self.save_every == 0 and current_epoch != (self.num_epochs - 1):
             self.save_checkpoint(join(self.output_folder, 'checkpoint_latest.pth'))
+            self.save_checkpoint(join(self.output_folder_models, f'checkpoint_epoch_{current_epoch + 1}.pth'))
 
         # handle 'best' checkpointing using EMA dice
         if self._best_ema_dice is None or self.logger.my_fantastic_logging['ema_dice'][-1] > self._best_ema_dice:
@@ -972,7 +1084,56 @@ class Trainer(object):
         if self.local_rank == self.gpu_id:
             self.logger.plot_progress_png(self.output_folder)
 
+        # Check if convergence or overfitting occurs
+        self.check_early_stopping()
+
         self.current_epoch += 1
+
+    def check_early_stopping(self):
+        # Fetch latest values
+        val_loss = self.logger.my_fantastic_logging['val_losses'][-1]
+        val_dice = self.logger.my_fantastic_logging['val_dice'][-1]
+        val_ssim = self.logger.my_fantastic_logging['val_ssim'][-1]
+        ema_loss = self.logger.my_fantastic_logging['ema_loss'][-1]
+        ema_dice = self.logger.my_fantastic_logging['ema_dice'][-1]
+
+        metrics_improved = False
+
+        # Check for improvement on all tracked metrics
+        if self._best_es_val_loss is None or val_loss < self._best_es_val_loss:
+            self._best_es_val_loss = val_loss
+            metrics_improved = True
+
+        if self._best_es_val_dice is None or val_dice > self._best_es_val_dice:
+            self._best_es_val_dice = val_dice
+            metrics_improved = True
+
+        if self._best_es_val_ssim is None or val_ssim > self._best_es_val_ssim:
+            self._best_es_val_ssim = val_ssim
+            metrics_improved = True
+
+        if self._best_es_ema_loss is None or ema_loss < self._best_es_ema_loss:
+            self._best_es_ema_loss = ema_loss
+            metrics_improved = True
+
+        if self._best_es_ema_dice is None or ema_dice > self._best_es_ema_dice:
+            self._best_es_ema_dice = ema_dice
+            metrics_improved = True
+
+        # Early stopping counter logic
+        if metrics_improved:
+            self.early_stop_counter = 0
+        else:
+            self.early_stop_counter += 1
+            self.print_to_log_file(
+                f"No improvement in metrics. Early stop patience counter: {self.early_stop_counter}/{self.early_stop_patience}"
+            )
+
+            if self.early_stop_counter >= self.early_stop_patience:
+                self.print_to_log_file(
+                    f"Early stopping triggered after {self.early_stop_patience} epochs without improvement."
+                )
+                self.stop_training = True
 
     def save_checkpoint(self, filename: str) -> None:
         if self.local_rank == self.gpu_id:
@@ -1053,16 +1214,21 @@ class Trainer(object):
             if checkpoint['grad_scaler_state'] is not None:
                 self.grad_scaler.load_state_dict(checkpoint['grad_scaler_state'])
     
-    def register_hooks(self):
+    '''def register_hooks(self):
         """Register hooks to capture gradients."""
-        for name, layer in self.network.named_children():
+        for name, layer in self.network.named_children(): #named_children()
             layer.register_backward_hook(self.save_gradient(name))
 
     def save_gradient(self, name):
         """Hook function to save gradients."""
         def hook(module, grad_input, grad_output):
             self.gradients[name] = grad_output[0]  # Store the gradient output
-        return hook
+        return hook'''
+    def register_param_hooks(self):
+        for name, param in self.network.named_parameters():
+            def hook_closure(n):
+                return lambda grad: self.gradients.__setitem__(n, grad.clone())
+            param.register_hook(hook_closure(name))
     
     def run_training(self):
         self.on_train_start()
@@ -1090,7 +1256,7 @@ class Trainer(object):
             self.on_epoch_start()
 
             self.on_train_epoch_start()
-            train_outputs = []
+            train_outputs = []  
 
             for batch_id in range(self.num_iterations_per_epoch):
                 print(f"Batch_id {batch_id}: ")
@@ -1098,11 +1264,12 @@ class Trainer(object):
 
                 # Log gradients to WandB (optional)
                 for name, grad in self.gradients.items():
-                    wandb.log({
-                        f"Gradient/{name}_mean": grad.mean().item(),
-                        f"Gradient/{name}_max": grad.max().item(),
-                        f"Gradient/{name}_min": grad.min().item()
-                    })
+                    if "param_fc" in name:
+                        wandb.log({
+                            f"Gradient/{name}_mean": grad.mean().item(),
+                            f"Gradient/{name}_max": grad.max().item(),
+                            f"Gradient/{name}_min": grad.min().item()
+                        }, step=self.global_step)
 
             self.on_train_epoch_end(train_outputs)
 
@@ -1114,6 +1281,10 @@ class Trainer(object):
                 self.on_validation_epoch_end(val_outputs)
 
             self.on_epoch_end()
+
+            if self.stop_training:
+                break
+        
         print('next epoch!')
         self.on_train_end()
 
