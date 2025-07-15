@@ -22,7 +22,7 @@ class InferenceManager:
     """
 
     def __init__(self, plans: dict, configuration: str, model: Literal['ViT', 'TumorSurrogate', 'nnUnet'] = "ViT",
-                 device: torch.device = torch.device(f'cuda:0'),  dataset_json :str ='', shape_data: torch.Size = None):
+                 device: torch.device = torch.device(f'cuda:0'),  dataset_json :str ='', shape_data: torch.Size = None, experiment = ['c', 'a_bottleneck']):
         self.device = device
         self.model = model
 
@@ -31,6 +31,7 @@ class InferenceManager:
         self.configuration_manager = self.plans_manager.get_configuration(configuration)
         self.dataset_json= dataset_json
         self.shape_data = shape_data
+        self.experiment = experiment
         # Model initialization
         self.network = self._initialize_model()
 
@@ -78,6 +79,7 @@ class InferenceManager:
             input_channels=num_input_channels,
             output_channels=num_output_channels,
             inputs_shape=self.shape_data,
+            experiments=self.experiment,
             allow_init=True,
             deep_supervision=enable_deep_supervision
         )
@@ -92,10 +94,10 @@ class InferenceManager:
                 max_volume_size=self.configuration_manager.patch_size[0], patch_size=16, in_chans=1, num_classes=1000,
                 embed_dim=384, depth=12, num_heads=6, mlp_ratio=4., qkv_bias=True, representation_size=None,
                 distilled=False, drop_rate=0., attn_drop_rate=0., drop_path_rate=0., embed_layer=PatchEmbed3D,
-                norm_layer=None, act_layer=None, weight_init='', global_pool=False, param_dim=5
+                norm_layer=None, act_layer=None, weight_init='', global_pool=False, param_dim=5, experiment=self.experiment
             ).to(self.device)
         elif self.model == "TumorSurrogate":
-            model = TumorSurrogate(widths=[128, 128, 128, 128], n_cells=[5, 5, 5, 4], strides=[2, 2, 2, 1])
+            model = TumorSurrogate(widths=[64, 64, 64, 64], n_cells=[4, 3, 3, 2], strides=[2, 2, 2, 1], experiment=self.experiment, inputs_shape=self.shape_data, param_dim=5)
             return model.to(self.device)
         elif self.model == "nnUnet":
             # Initialize nnUnet model for inference
@@ -128,8 +130,20 @@ class InferenceManager:
             for k, v in state_dict.items()
         }
         if isinstance(self.network, OptimizedModule):
-            self.network._orig_mod.load_state_dict(new_state_dict)
+            try:
+                self.network._orig_mod.load_state_dict(new_state_dict, strict=True)
+                print("Loaded state_dict with strict=True")
+            except RuntimeError as e:
+                print(f"Strict loading failed with error:\n{e}\nTrying with strict=False...")
+                self.network._orig_mod.load_state_dict(new_state_dict, strict=False)
+                print("Loaded state_dict with strict=False (some parameters might be missing or unexpected)")
         else:
-            self.network.load_state_dict(new_state_dict)
+            try:
+                self.network.load_state_dict(new_state_dict, strict=True)
+                print("Loaded state_dict with strict=True")
+            except RuntimeError as e:
+                print(f"Strict loading failed with error:\n{e}\nTrying with strict=False...")
+                self.network.load_state_dict(new_state_dict, strict=False)
+                print("Loaded state_dict with strict=False (some parameters might be missing or unexpected)")
         # Load state dict into model
         print(f"Checkpoint loaded successfully from {checkpoint_path}.")
