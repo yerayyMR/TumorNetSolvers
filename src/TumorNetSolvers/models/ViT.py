@@ -90,9 +90,10 @@ class CombinedVisionTransformer3D(nn.Module):
     def __init__(self, max_volume_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=384, depth=12,
                 num_heads=6, mlp_ratio=4., qkv_bias=True, representation_size=None, distilled=False,
                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0., embed_layer=PatchEmbed3D, norm_layer=None,
-                act_layer=None, weight_init='', global_pool=False, param_dim=10):
+                act_layer=None, weight_init='', global_pool=False, param_dim=10, experiment=None):
         super().__init__()
 
+        self.experiment = experiment
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim
         self.num_tokens = 3 if distilled else 2  # Account for param_embed token
@@ -102,9 +103,13 @@ class CombinedVisionTransformer3D(nn.Module):
         self.max_volume_size = traid(max_volume_size)
 
         self.patch_embed = embed_layer(max_volume_size=max_volume_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
-        self.param_embed = ParameterEmbedding(param_dim, embed_dim)
-
         max_num_patches = self.patch_embed.max_num_patches
+        self.param_embed = ParameterEmbedding(param_dim, embed_dim, self.experiment, N_patches=max_num_patches)
+
+        if self.experiment[1] == "embed_concat":
+            embed_dim += self.param_embed.extra_dims
+            self.embed_dim = embed_dim  # update the class attribute here
+            self.num_features = embed_dim
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, max_num_patches + self.num_tokens, embed_dim), requires_grad=False)
@@ -156,8 +161,13 @@ class CombinedVisionTransformer3D(nn.Module):
     def forward_features(self, x, param_token):
         x = self.patch_embed(x)  
         B, Num_Patches, _ = x.shape 
-        param_tokens = self.param_embed(param_token) 
-        x = torch.cat((x, param_tokens), dim=1)
+        param_tokens = self.param_embed(param_token)
+        if self.experiment[1] == "embed_concat":
+            x = torch.cat([x, param_tokens], dim=2)
+        elif self.experiment[1] == "embed_add":
+            x = x + param_tokens
+        else:
+            x = torch.cat((x, param_tokens), dim=1)
         x = self.pos_drop(x)
         for blk in self.blocks:
             x = blk(x)
