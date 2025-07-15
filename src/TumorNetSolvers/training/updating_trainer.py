@@ -8,6 +8,7 @@ from copy import deepcopy
 from datetime import datetime
 from time import time, sleep
 from typing import Tuple, Union, List, Literal
+import random
 
 import wandb
 import numpy as np
@@ -59,7 +60,7 @@ from batchgeneratorsv2.helpers.scalar_type import RandomScalar
 from TumorNetSolvers.utils.paths import set_environment_variables
 set_environment_variables()
 nnUNet_preprocessed = os.environ.get('nnUNet_preprocessed')
-nnUNet_results = os.environ.get('nnUNet_results')
+nnUNet_results = os.path.join('/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/', "results")#os.environ.get('nnUNet_results')
 
 # If they are not set, raise an error or handle the missing paths
 if not nnUNet_preprocessed or not nnUNet_results:
@@ -75,7 +76,7 @@ def init_weights(layer):
 
 class Trainer(object):
     def __init__(self, plans: dict, configuration: str, dataset_json: dict, signature:str, fold: Union[Literal['train_val', 'all'], int]= "train_val",  unpack_dataset: bool = True, loss_func: Literal['mse', 'mae']= 'mse', model: Literal['nnUnet', 'ViT', 'TumorSurrogate']= "ViT",
-                 device: torch.device = torch.device(f'cuda:5'), project_name="NN-based-tumor-solvers", experiments = [['c', 'a_bottleneck']]):
+                 device: torch.device = torch.device(f'cuda:5'), project_name="NN-based-tumor-solvers", experiments = [['c', 'a_bottleneck']], seed = 12345):
         self.signature=signature #Must Be Defined!!
         self.enable_deep_supervision = False
         self.model= model
@@ -85,6 +86,8 @@ class Trainer(object):
         self.device = device
         self.loss_fn= loss_func
         self.mask= nn.ReLU()
+        self.seed = seed
+        self.set_all_seeds(self.seed)
 
         # Experiments
         self.experiments = experiments
@@ -125,9 +128,12 @@ class Trainer(object):
         self.output_folder_base = join(nnUNet_results, self.plans_manager.dataset_name,
                                        self.__class__.__name__ + '__' + self.plans_manager.plans_name + "__" + configuration) \
             if nnUNet_results is not None else None
-        self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', 'forward_1k')
+        if self.model == "ViT":
+            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'MODE_{self.experiments[1]}_METHOD_{self.experiments[0]}_best_DTI')
+        else:
+            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'LOC_{self.experiments[1]}_MODE_{self.experiments[0]}_best_DTI') #_og
 
-        self.output_folder_models = join(self.output_folder, 'models_extra')
+        #self.output_folder_models = join(self.output_folder, 'models_extra')
 
         self.preprocessed_dataset_folder = join(self.preprocessed_dataset_folder_base,
                                                 self.configuration_manager.data_identifier)
@@ -137,13 +143,11 @@ class Trainer(object):
         ### Some hyperparameters for you to fiddle with
         self.initial_lr = 1e-2
         self.weight_decay = 3e-5
-        self.num_iterations_per_epoch =  400 #ideally dataset_sz//batch_sz
-        self.num_val_iterations_per_epoch = 100
-        self.num_epochs = 1000
+        self.num_epochs = 10000
         self.current_epoch = 0
         self.num_input_channels = None  # -> self.initialize()
         
-        if self.model=="ViT":
+        '''if self.model=="ViT":
             #####TODO: max_volume_size should be extracted automatically (dataset_fingerprint.json file)
             self.network = CombinedVisionTransformer3D(max_volume_size=self.configuration_manager.patch_size[0], patch_size=16, in_chans=1, num_classes=1000, embed_dim=384, depth=12,
                     num_heads=6, mlp_ratio=4., qkv_bias=True, representation_size=None, distilled=False,
@@ -151,9 +155,9 @@ class Trainer(object):
                     act_layer=None, weight_init='', global_pool=False, param_dim=5).to(self.device)
         
         elif self.model=="TumorSurrogate":
-            self.network = TumorSurrogate(widths=[128, 128, 128, 128], n_cells=[5, 5, 5, 4], strides=[2, 2, 2, 1]).to(self.device)
-            self.network.apply(init_weights)
-        elif self.model=="nnUnet":
+            self.network = TumorSurrogate(widths=[128, 128, 128, 128], n_cells=[5, 5, 5, 4], strides=[2, 2, 2, 1], experiment=self.experiments, inputs_shape=self.shape_data, param_dim).to(self.device)
+            self.network.apply(init_weights)'''
+        if self.model=="nnUnet":
              self.enable_deep_supervision = True
 
 
@@ -166,7 +170,7 @@ class Trainer(object):
         # logging
         timestamp = datetime.now()
         maybe_mkdir_p(self.output_folder)
-        maybe_mkdir_p(self.output_folder_models)
+        #maybe_mkdir_p(self.output_folder_models)
         self.log_file = join(self.output_folder, "training_log_%d_%d_%d_%02.0d_%02.0d_%02.0d.txt" %
                              (timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute,
                               timestamp.second))
@@ -192,19 +196,55 @@ class Trainer(object):
         self.inference_allowed_mirroring_axes = None  # ->self.configure_rotation_dummyDA_mirroring_and_inital_patch_size  (will be saved in checkpoints)
 
         ### checkpoint saving 
-        self.save_every = 10
+        self.save_every = 50
         self.disable_checkpointing = False
 
         ## DDP batch size and oversampling can differ between workers and needs adaptation
         # we need to change the batch size in DDP because we don't use any of those distributed samplers
         self._set_batch_size()
+        self.batch_size = 512
         self.project_name=project_name #"NN-based-tumor-solvers"
 
-        wandb.init(project=self.project_name, settings=wandb.Settings(_disable_stats=True))
+        tr_dataset, val_dataset = self.get_tr_and_val_datasets()
+        self.num_iterations_per_epoch =  len(tr_dataset)//self.batch_size #ideally dataset_sz//batch_sz
+        self.num_val_iterations_per_epoch = len(val_dataset)//(self.batch_size/4)
+
+        if self.model == "ViT":
+            wandb.init(project=self.project_name, name=f"[{self.model} - Best DTI] Mode: {self.experiments[1]}, Method: {self.experiments[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
+        else:
+            wandb.init(project=self.project_name, name=f"[{self.model} - Best DTI] Loc: {self.experiments[1]}, Mode: {self.experiments[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
         
         self.was_initialized = False
         
+    def set_all_seeds(self, seed: int = 42, deterministic: bool = True):
+        """
+        Set seed for reproducibility across various libraries and environments.
 
+        Args:
+            seed (int): The seed value to use.
+            deterministic (bool): Whether to enforce deterministic behavior in PyTorch (can affect performance).
+        """
+        # Python's built-in randomness
+        random.seed(seed)
+
+        # Numpy
+        np.random.seed(seed)
+
+        # PyTorch (both CPU and GPU)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+        # PyTorch deterministic settings
+        if deterministic:
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+        else:
+            torch.backends.cudnn.deterministic = False
+            torch.backends.cudnn.benchmark = True
+
+        # Environmental variables
+        os.environ["PYTHONHASHSEED"] = str(seed)
 
     def initialize(self):
         if not self.was_initialized:
@@ -216,6 +256,17 @@ class Trainer(object):
                     self.configuration_manager.network_arch_init_kwargs,
                     self.configuration_manager.network_arch_init_kwargs_req_import,
                     self.num_input_channels).to(self.device)
+
+            if self.model=="ViT":
+                #####TODO: max_volume_size should be extracted automatically (dataset_fingerprint.json file)
+                self.network = CombinedVisionTransformer3D(max_volume_size=self.configuration_manager.patch_size[0], patch_size=16, in_chans=1, num_classes=1000, embed_dim=384, depth=12,
+                        num_heads=6, mlp_ratio=4., qkv_bias=True, representation_size=None, distilled=False,
+                        drop_rate=0., attn_drop_rate=0., drop_path_rate=0., embed_layer=PatchEmbed3D, norm_layer=None,
+                        act_layer=None, weight_init='', global_pool=False, param_dim=5, experiment=self.experiments).to(self.device)
+            
+            elif self.model=="TumorSurrogate":
+                self.network = TumorSurrogate(widths=[64, 64, 64, 64], n_cells=[4, 3, 3, 2], strides=[2, 2, 2, 1], experiment=self.experiments, inputs_shape=self.shape_data, param_dim=5).to(self.device)
+                self.network.apply(init_weights)
 
             # compile network for free speedup
             if self._do_i_compile():
@@ -311,6 +362,7 @@ class Trainer(object):
             input_channels=num_input_channels,
             output_channels=num_output_channels,
             inputs_shape=self.shape_data,
+            experiments=self.experiments,
             allow_init=True,
             deep_supervision=enable_deep_supervision
         )
@@ -463,7 +515,7 @@ class Trainer(object):
                 optimizer = torch.optim.AdamW(self.network.parameters() , lr=2e-4, weight_decay=1e-2)
                 lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
                     optimizer, max_lr=0.0008,  # Larger initial LR, suited for exploration
-                    total_steps=self.num_epochs, 
+                    total_steps=self.num_epochs * self.num_iterations_per_epoch, 
                     pct_start=0.1,  # 10% of epochs for gradual ramp-up
                     anneal_strategy='linear',
                     cycle_momentum=False,
@@ -581,18 +633,18 @@ class Trainer(object):
                                     param_file=self.param_file,
                                     num_images_properties_loading_threshold=0)
 
-            self.print_to_log_file("Creating (and overwriting) 5-fold train/val/test cross-validation split...")
+            self.print_to_log_file("Creating (and overwriting) 10-fold train/val/test cross-validation split...")
             all_keys_sorted = list(np.sort(list(dataset.keys())))
 
             from sklearn.model_selection import KFold
-            kf = KFold(n_splits=5, shuffle=True, random_state=12345)
+            kf = KFold(n_splits=10, shuffle=True, random_state=12345)
             all_folds = list(kf.split(all_keys_sorted))
             splits = []
 
-            for fold in range(5):
+            for fold in range(10):
                 test_idx = fold
-                val_idx = (fold + 1) % 5
-                train_idx = [i for i in range(5) if i != test_idx and i != val_idx]
+                val_idx = (fold + 1) % 10
+                train_idx = [i for i in range(10) if i != test_idx and i != val_idx]
 
                 test_cases = [all_keys_sorted[i] for i in all_folds[test_idx][1]]
                 val_cases = [all_keys_sorted[i] for i in all_folds[val_idx][1]]
@@ -623,7 +675,7 @@ class Trainer(object):
                 self.print_to_log_file("INFO: You requested fold %d for training but splits "
                                     "contain only %d folds. Creating a random (seeded) 80:20 split."
                                     % (self.fold, len(splits)))
-                rnd = np.random.RandomState(seed=12345 + self.fold)
+                rnd = np.random.RandomState(seed=self.seed + self.fold)
                 keys = np.sort(list(dataset.keys()))
                 idx_tr = rnd.choice(len(keys), int(len(keys) * 0.8), replace=False)
                 idx_val = [i for i in range(len(keys)) if i not in idx_tr]
@@ -637,10 +689,6 @@ class Trainer(object):
                 self.print_to_log_file('WARNING: Some validation cases are also in the training set. Please check the '
                                     'splits.json or ignore if this is intentional.')
 
-
-
-        
-        
         return tr_keys, val_keys, test_keys
 
     def get_tr_and_val_datasets(self):
@@ -657,7 +705,6 @@ class Trainer(object):
                                     param_file= self.param_file,
                                     num_images_properties_loading_threshold=0)
         return dataset_tr, dataset_val
-
 
     def get_dataloaders(self):
         patch_size = self.configuration_manager.patch_size
@@ -720,7 +767,7 @@ class Trainer(object):
 
             dl_val = nnUNetDataLoader3D(
                 dataset_val,
-                self.batch_size,
+                self.batch_size/4,
                 self.configuration_manager.patch_size,  # Use final patch size for validation
                 self.configuration_manager.patch_size,  # Same patch size for validation
                 transforms=val_transforms  # Apply validation transformations
@@ -734,11 +781,11 @@ class Trainer(object):
         else:
             mt_gen_train = NonDetMultiThreadedAugmenter(data_loader=dl_tr, transform=None,
                                                         num_processes=allowed_num_processes,
-                                                        num_cached=max(6, allowed_num_processes // 2), seeds=None,
+                                                        num_cached=max(6, allowed_num_processes // 2), seeds=[self.seed + i for i in range(allowed_num_processes)],
                                                         pin_memory=self.device.type == 'cuda', wait_time=0.002)
             mt_gen_val = NonDetMultiThreadedAugmenter(data_loader=dl_val,
                                                     transform=None, num_processes=max(1, allowed_num_processes // 2),
-                                                    num_cached=max(3, allowed_num_processes // 4), seeds=None,
+                                                    num_cached=max(3, allowed_num_processes // 4), seeds=[self.seed + 1000 + i for i in range(max(1, allowed_num_processes // 2))],
                                                     pin_memory=self.device.type == 'cuda',
                                                     wait_time=0.002)
         # Initialize the data generators
@@ -845,13 +892,13 @@ class Trainer(object):
     def on_train_end(self):
         # dirty hack because on_epoch_end increments the epoch counter and this is executed afterwards.
         # This will lead to the wrong current epoch to be stored
-        self.current_epoch -= 1
+        '''self.current_epoch -= 1
         self.save_checkpoint(join(self.output_folder, "checkpoint_final.pth"))
         self.current_epoch += 1
 
         # now we can delete latest
         if self.local_rank == self.gpu_id and isfile(join(self.output_folder, "checkpoint_latest.pth")):
-            os.remove(join(self.output_folder, "checkpoint_latest.pth"))
+            os.remove(join(self.output_folder, "checkpoint_latest.pth"))'''
 
         # shut down dataloaders
         old_stdout = sys.stdout
@@ -880,7 +927,7 @@ class Trainer(object):
     def train_step(self, batch: dict) -> dict:
         data = batch['data']
         target = batch['target']
-        param=batch['params']
+        param=batch['params']#[:, -2:]
         
         data = data.to(self.device, non_blocking=True)
         param = param.to(self.device, non_blocking=True)
@@ -962,7 +1009,7 @@ class Trainer(object):
     def validation_step(self, batch: dict) -> dict:
         data = batch['data']
         target = batch['target']
-        param = batch['params']
+        param = batch['params']#[:, -2:]
 
         data = data.to(self.device, non_blocking=True)
         if isinstance(target, list):
@@ -982,7 +1029,8 @@ class Trainer(object):
             target = target[0]
             print(output.shape, target.shape)
 
-        predicted = output
+        # Clip predictions to [0, 1]
+        predicted = output.clamp(0, 1)
         print("pred shape: ", predicted.shape, f"max_v {predicted.max()}, min_v {predicted.min()} "
               "\n target shape: ", target.shape, f"max_v {target.max()}, min_v {target.min()})")
         
@@ -1054,21 +1102,30 @@ class Trainer(object):
             f"Epoch time: {np.round(self.logger.my_fantastic_logging['epoch_end_timestamps'][-1] - self.logger.my_fantastic_logging['epoch_start_timestamps'][-1], decimals=2)} s")
 
         # handling periodic checkpointing
+        '''current_epoch = self.current_epoch
+        if (current_epoch + 1) % self.save_every == 0 and current_epoch != (self.num_epochs - 1):
+            self.save_checkpoint(join(self.output_folder, 'checkpoint_latest.pth'))'''
+
+        elapsed_time = time() - self.start_time
+        self.save_every_hours = 6 * 3600
+        if elapsed_time > self.save_every_hours:
+            self.save_checkpoint(join(self.output_folder, f'checkpoint_epoch_{self.current_epoch}_6h.pth'))
+            #os.remove(join(self.output_folder, f'checkpoint_epoch_{self.previous_epoch_saved}.pth'))
+            self.start_time = time()
+        
         current_epoch = self.current_epoch
         if (current_epoch + 1) % self.save_every == 0 and current_epoch != (self.num_epochs - 1):
-            self.save_checkpoint(join(self.output_folder, 'checkpoint_latest.pth'))
-            self.save_checkpoint(join(self.output_folder_models, f'checkpoint_epoch_{current_epoch + 1}.pth'))
-
+            self.save_checkpoint(join(self.output_folder, f'checkpoint_epoch_{self.current_epoch}_counter.pth'))
         # handle 'best' checkpointing using EMA dice
         if self._best_ema_dice is None or self.logger.my_fantastic_logging['ema_dice'][-1] > self._best_ema_dice:
             self._best_ema_dice = self.logger.my_fantastic_logging['ema_dice'][-1]
-            self.print_to_log_file(f"New best EMA Dice: {np.round(self._best_ema_dice.cpu(), decimals=4)}")
-            self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_best_ema_dice.pth'))
+            #self.print_to_log_file(f"New best EMA Dice: {np.round(self._best_ema_dice.cpu(), decimals=4)}")
+            #self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_best_ema_dice.pth'))
 
         # handle 'best' checkpointing using val dice
         if self._best_val_dice is None or self.logger.my_fantastic_logging['val_dice'][-1] > self._best_val_dice:
             self._best_val_dice = self.logger.my_fantastic_logging['val_dice'][-1]
-            self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_best_val_dice.pth'))
+            #self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_best_val_dice.pth'))
         
         if self._best_ema_loss is None or self.logger.my_fantastic_logging['ema_loss'][-1] < self._best_ema_loss:
             self._best_ema_loss = self.logger.my_fantastic_logging['ema_loss'][-1]
@@ -1078,7 +1135,7 @@ class Trainer(object):
         # handle 'best' checkpointing using val loss
         if self._best_val_loss is None or self.logger.my_fantastic_logging['val_losses'][-1] < self._best_val_loss:
             self._best_val_loss = self.logger.my_fantastic_logging['val_losses'][-1]
-            self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_best_val_loss.pth'))
+            #self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_best_val_loss.pth'))
         
 
         if self.local_rank == self.gpu_id:
@@ -1093,7 +1150,6 @@ class Trainer(object):
         # Fetch latest values
         val_loss = self.logger.my_fantastic_logging['val_losses'][-1]
         val_dice = self.logger.my_fantastic_logging['val_dice'][-1]
-        val_ssim = self.logger.my_fantastic_logging['val_ssim'][-1]
         ema_loss = self.logger.my_fantastic_logging['ema_loss'][-1]
         ema_dice = self.logger.my_fantastic_logging['ema_dice'][-1]
 
@@ -1106,10 +1162,6 @@ class Trainer(object):
 
         if self._best_es_val_dice is None or val_dice > self._best_es_val_dice:
             self._best_es_val_dice = val_dice
-            metrics_improved = True
-
-        if self._best_es_val_ssim is None or val_ssim > self._best_es_val_ssim:
-            self._best_es_val_ssim = val_ssim
             metrics_improved = True
 
         if self._best_es_ema_loss is None or ema_loss < self._best_es_ema_loss:
@@ -1226,6 +1278,9 @@ class Trainer(object):
         return hook'''
     def register_param_hooks(self):
         for name, param in self.network.named_parameters():
+            if not param.requires_grad:
+                continue  # Skip non-trainable parameters
+
             def hook_closure(n):
                 return lambda grad: self.gradients.__setitem__(n, grad.clone())
             param.register_hook(hook_closure(name))
@@ -1233,6 +1288,10 @@ class Trainer(object):
     def run_training(self):
         self.on_train_start()
         
+        # Start time
+        self.start_time = time()
+        time_limit_seconds = 72 * 3600  # 72 hours in seconds
+
         # log important settings
         wandb.config.update({
         'Model': self.model,
@@ -1247,8 +1306,6 @@ class Trainer(object):
 
         #  Define a dictionary to store gradients for each layer
         
-
-       
         save_frequency = 1
         self.name = wandb.run.name
         for epoch in range(self.current_epoch, self.num_epochs):
@@ -1263,13 +1320,13 @@ class Trainer(object):
                 train_outputs.append(self.train_step(next(self.dataloader_train)))
 
                 # Log gradients to WandB (optional)
-                for name, grad in self.gradients.items():
+                '''for name, grad in self.gradients.items():
                     if "param_fc" in name:
                         wandb.log({
                             f"Gradient/{name}_mean": grad.mean().item(),
                             f"Gradient/{name}_max": grad.max().item(),
                             f"Gradient/{name}_min": grad.min().item()
-                        }, step=self.global_step)
+                        }, step=self.global_step)'''
 
             self.on_train_epoch_end(train_outputs)
 
@@ -1282,8 +1339,14 @@ class Trainer(object):
 
             self.on_epoch_end()
 
-            if self.stop_training:
+            # Check time after both training and validation are complete
+            '''elapsed_time = time() - start_time
+            if elapsed_time > time_limit_seconds:
+                print(f"Stopping training after epoch {epoch}: 72-hour time limit exceeded.")
                 break
+
+            if self.stop_training:
+                break'''
         
         print('next epoch!')
         self.on_train_end()
