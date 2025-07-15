@@ -16,7 +16,7 @@ def folder_is_empty_or_missing(folder_path: str) -> bool:
     return not os.path.exists(folder_path) or len(os.listdir(folder_path)) == 0
 
 
-def run_inference(dataset_name: str, models: list, data_folder: str, output_base: str, device: torch.device = torch.device('cuda:0'), signature: str = '10k', chkpt: str=''):
+def run_inference(dataset_name: str, models: list, data_folder: str, output_base: str, device: torch.device = torch.device('cuda:0'), signature: str = '10k', experiment = ['c', 'a_bottleneck'], chkpt: str=''):
     """
     Runs inference on a given dataset using one or more models & saves predictions to specified output 
     directory. Optionally, saves masked outputs (useful for performance comparison with baseline pipeline).
@@ -43,7 +43,7 @@ def run_inference(dataset_name: str, models: list, data_folder: str, output_base
 
     # Set up the dataset and data loader
     dataset = CustomDataset(data_folder, test_keys)
-    data_loader = DataLoader(dataset, batch_size=5, shuffle=False)
+    data_loader = DataLoader(dataset, batch_size=25, shuffle=False)
     os.makedirs(output_base, exist_ok=True)
     # Obtain the shape of the input
     shape_data = dataset[0][0].shape # First [0] gets the sample tuple, second [0] extracts the image (data['data']) from it
@@ -59,7 +59,7 @@ def run_inference(dataset_name: str, models: list, data_folder: str, output_base
     # Perform inference for each model
     for model_name in models:
         # Initialize trainer and load model checkpoint
-        infer_manager = InferenceManager(plan, configuration='3d_fullres', model=model_name, device=device, dataset_json=dataset_json, shape_data=shape_data)#, signature=signature)
+        infer_manager = InferenceManager(plan, configuration='3d_fullres', model=model_name, device=device, dataset_json=dataset_json, shape_data=shape_data, experiment=experiment)#, signature=signature)
 
         # Construct the checkpoint path
         if chkpt and os.path.exists(chkpt):
@@ -90,12 +90,15 @@ def run_inference(dataset_name: str, models: list, data_folder: str, output_base
                 # Gather model parameters and perform inference
                 batch_params = [parameters[key] for key in keys]
                 batch_params = torch.stack(batch_params).to(device)
+                #batch_params[:] = 0
                 #batch_params /= 2
                 output = model(data, batch_params)
 
                 # Apply deep supervision if enabled
                 if isinstance(output,list):
                     output = output[0]
+                    
+                output = torch.clamp(output, min=0.0, max=1.0)
 
                 # Save predictions
                 for i in range(output.shape[0]):
