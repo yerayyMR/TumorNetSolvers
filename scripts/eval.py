@@ -21,7 +21,7 @@ Outputs:
 """
 # %% Performance Evaluation and Statistical Analysis
 import os
-
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))  # scripts directory
 src_path = os.path.abspath(os.path.join(current_dir, '..', 'src'))
@@ -39,50 +39,70 @@ nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
 nnUNet_results = os.getenv('nnUNet_results')
 
 # Configuration
-DATASET_NAME = 'Dataset500_Brain' 
+DATASET_NAME = 'Dataset900_Brain' 
 MODELS = ['nnUnet']  # List of models for evaluation
 SIGNATURE = '10k'
 MASKED = False  # Binary flag for masked evaluation
 
-# Define output directory for performance summaries
-summary_dir = os.path.join("performance_summaries", "init")
-os.makedirs(summary_dir, exist_ok=True)
+'''EXPERIMENTS = [ ['c', 'a_downsampling'], ['a', 'a_downsampling'],
+                    ['c', 'b_downsampling'], ['a', 'b_downsampling'],
+                    ['c', 'inputs'], ['a', 'inputs'],
+                    ['c', 'b_bottleneck'], ['a', 'b_bottleneck'],
+                    ['c', 'a_bottleneck'], ['a', 'a_bottleneck']]'''
 
-# Determine ground truth folder
-if MASKED:
-    GT_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, 'masked_gt')
-    if not os.path.exists(GT_FOLDER) or len(os.listdir(GT_FOLDER)) == 0:
-        raise FileNotFoundError(f"Masked ground truth folder is missing or empty: {GT_FOLDER}")
-else:
-    GT_FOLDER = os.path.join(nnUNet_preprocessed, DATASET_NAME, 'nnUNetPlans_3d_fullres')
+EXPERIMENTS = [ ['a', 'b_upsampling'], ['c', 'b_upsampling'],
+                    ['a', 'a_upsampling'], ['c', 'a_upsampling'],
+                    ['a', 'a_upsampling_skip']]
 
-# Evaluate each model
-for MODEL in MODELS:
-    # Determine predictions folder
-    if MASKED:
-        PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, 'init', 'preds', f'_{MODEL}_{SIGNATURE}/masked')
+for experiment in EXPERIMENTS:
+    # Define output directory for performance summaries
+    if MODELS[0] == "ViT":
+        summary_dir = os.path.join("performance_summaries", DATASET_NAME , MODELS[0], f'MODE_{experiment[1]}_METHOD_{experiment[0]}_og')
     else:
-        PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, 'init', 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
+        summary_dir = os.path.join("performance_summaries", DATASET_NAME , MODELS[0], f'LOC_{experiment[1]}_MODE_{experiment[0]}')
+    os.makedirs(summary_dir, exist_ok=True)
 
-    # Validate folders
-    if not os.path.exists(PREDS_FOLDER):
-        raise FileNotFoundError(f"Predictions folder not found: {PREDS_FOLDER}")
-    if not os.path.exists(GT_FOLDER):
-        raise FileNotFoundError(f"Ground truth folder not found: {GT_FOLDER}")
+    # Determine ground truth folder
+    if MASKED:
+        GT_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, 'masked_gt')
+        if not os.path.exists(GT_FOLDER) or len(os.listdir(GT_FOLDER)) == 0:
+            raise FileNotFoundError(f"Masked ground truth folder is missing or empty: {GT_FOLDER}")
+    else:
+        GT_FOLDER = os.path.join(nnUNet_preprocessed, DATASET_NAME, 'nnUNetPlans_3d_fullres')
 
-    # Define output file paths
-    EVALUATION_RESULTS_FILE = os.path.join(summary_dir, f"evaluation_results_{MODEL}_{SIGNATURE}{'_masked' if MASKED else ''}.json")
-    OUTPUT_SUMMARY_FILE = os.path.join(summary_dir, f"output_summary_{MODEL}_{SIGNATURE}{'_masked' if MASKED else ''}.json")
+    # Evaluate each model
+    for MODEL in MODELS:
+        # Determine predictions folder
+        if MODELS[0] == "ViT":
+            if MASKED:
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, f'MODE_{experiment[1]}_METHOD_{experiment[0]}_og', 'preds', f'_{MODEL}_{SIGNATURE}/masked')
+            else:
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, f'MODE_{experiment[1]}_METHOD_{experiment[0]}_og', 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
+        else:
+            if MASKED:
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, f'LOC_{experiment[1]}_MODE_{experiment[0]}', 'preds', f'_{MODEL}_{SIGNATURE}/masked')
+            else:
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, f'LOC_{experiment[1]}_MODE_{experiment[0]}', 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
 
-    # Compute evaluation metrics
-    print(f"Computing evaluation metrics for {MODEL} (masked={MASKED})...")
-    results = compute_metrics(PREDS_FOLDER, GT_FOLDER)
-    save_results_to_json(results, EVALUATION_RESULTS_FILE)
-    print(f"Evaluation results saved to {EVALUATION_RESULTS_FILE}")
+        # Validate folders
+        if not os.path.exists(PREDS_FOLDER):
+            raise FileNotFoundError(f"Predictions folder not found: {PREDS_FOLDER}")
+        if not os.path.exists(GT_FOLDER):
+            raise FileNotFoundError(f"Ground truth folder not found: {GT_FOLDER}")
 
-    # Compute statistical summary
-    print("Analyzing statistical properties and extremes...")
-    summary = compute_statistics_with_extremes(EVALUATION_RESULTS_FILE, OUTPUT_SUMMARY_FILE)
-    print(f"Summary statistics saved to {OUTPUT_SUMMARY_FILE}")
+        # Define output file paths
+        EVALUATION_RESULTS_FILE = os.path.join(summary_dir, f"evaluation_results_{MODEL}_{SIGNATURE}{'_masked' if MASKED else ''}.json")
+        OUTPUT_SUMMARY_FILE = os.path.join(summary_dir, f"output_summary_{MODEL}_{SIGNATURE}{'_masked' if MASKED else ''}.json")
+
+        # Compute evaluation metrics
+        print(f"Computing evaluation metrics for {MODEL} (masked={MASKED})...")
+        results = compute_metrics(PREDS_FOLDER, GT_FOLDER)
+        save_results_to_json(results, EVALUATION_RESULTS_FILE)
+        print(f"Evaluation results saved to {EVALUATION_RESULTS_FILE}")
+
+        # Compute statistical summary
+        print("Analyzing statistical properties and extremes...")
+        summary = compute_statistics_with_extremes(EVALUATION_RESULTS_FILE, OUTPUT_SUMMARY_FILE)
+        print(f"Summary statistics saved to {OUTPUT_SUMMARY_FILE}")
 
 # %%

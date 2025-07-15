@@ -14,6 +14,7 @@ Outputs:
 """
 #%%
 import os
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import sys
 from set_env import set_environment_variables
 set_environment_variables()
@@ -32,27 +33,36 @@ def main():
     nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
     nnUNet_results= os.getenv('nnUNet_results')
     # ============ Configuration ============
-    DATASET_NAME = 'Dataset700_Brain'  # Specify the dataset name
+    DATASET_NAME = 'Dataset900_Brain'  # Specify the dataset name
     MODELS = ['nnUnet']  # Models to use for inference e.g. ['ViT', 'nnUnet', 'TumorSurrogate']
     DEVICE = torch.device('cuda:0')  
 
+    EXPERIMENTS = [ ['a', 'b_upsampling'], ['c', 'b_upsampling'],
+                    ['a', 'a_upsampling'], ['c', 'a_upsampling'],
+                    ['a', 'a_upsampling_skip']]
+    # ['a', 'b_bottleneck'], ['a', 'a_bottleneck'], ['c', 'a_bottleneck'] 
     # Paths
-    DATA_FOLDER = os.path.join(nnUNet_preprocessed, DATASET_NAME,"nnUNetPlans_3d_fullres")
-    OUTPUT_BASE = os.path.join(nnUNet_results, DATASET_NAME, 'init_1k_0.5_coeff', 'preds')
-    SIGNATURE='10k'
+    for experiment in EXPERIMENTS:
+        DATA_FOLDER = os.path.join(nnUNet_preprocessed, DATASET_NAME,"nnUNetPlans_3d_fullres")
+        if MODELS[0] == "ViT":
+            OUTPUT_BASE = os.path.join(nnUNet_results, DATASET_NAME, f'MODE_{experiment[1]}_METHOD_{experiment[0]}_og', 'preds')
+        else:
+            OUTPUT_BASE = os.path.join(nnUNet_results, DATASET_NAME, f'LOC_{experiment[1]}_MODE_{experiment[0]}', 'preds')
+        SIGNATURE='10k'
 
-    # ============ Run Inference ============
-    print("Running inference...")
-    run_inference(
-        dataset_name=DATASET_NAME,
-        models=MODELS,
-        data_folder=DATA_FOLDER,
-        output_base=OUTPUT_BASE,
-        device=DEVICE,
-        signature=SIGNATURE,
-        chkpt="/mnt/Drive3/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/Dataset700_Brain/Trainer__nnUNetPlans__3d_fullres/fold_2/_10k_nnUnet/init_1k/checkpoint_nnUnet_best_ema_dice.pth"
-    )
-    print("Inference complete. Results saved to output directory.")
+        # ============ Run Inference ============
+        print("Running inference...")
+        run_inference(
+            dataset_name=DATASET_NAME,
+            models=MODELS,
+            data_folder=DATA_FOLDER,
+            output_base=OUTPUT_BASE,
+            device=DEVICE,
+            signature=SIGNATURE,
+            experiment = experiment,
+            chkpt=f"/mnt/Drive3/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/Dataset900_Brain/Trainer__nnUNetPlans__3d_fullres/fold_train_val_test/_10k_{MODELS[0]}/LOC_{experiment[1]}_MODE_{experiment[0]}/checkpoint_{MODELS[0]}_best_ema_loss.pth"
+        )
+        print("Inference complete. Results saved to output directory.")
 
 if __name__ == "__main__":
     main()
