@@ -191,6 +191,9 @@ def process_patient(patient, atlasTissue, id, datasetPath, mount_dir, crop_sz, d
         file_n3 = f"{anatomical_struct.upper()}_p{formatted_patient_number}"
         print(f"Processing patient {patient_number}, saving as {file_n3}")
 
+        if file_n3 == "BRAIN_p129":
+            print("h")
+
         patientImg = nib.load(f"{datasetPath}{patient}/tumor_concentration.nii.gz")
         tumorImg = patientImg.get_fdata() if is_synthetic else load_real_patient_data(f"{datasetPath}{patient}")   ####
         atlasImg = atlasTissue.get_fdata()
@@ -215,9 +218,9 @@ def process_patient(patient, atlasTissue, id, datasetPath, mount_dir, crop_sz, d
         return {}
 
 
-def preparingDataset(id, mount_dir, anatomical_struct="Brain", start=0, stop=9, crop_sz=120, downsample_sz=64, is_synthetic=True):
+def preparingDataset(id, mount_dir, anatomical_struct="Brain", start=0, stop=9, crop_sz=120, downsample_sz=64, is_synthetic=True, batch_size=1000):
     """
-    Prepare the dataset by processing multiple patients in parallel.
+    Prepare the dataset by processing patients in batches of up to 1000 in parallel.
 
     Args:
         id (int): Dataset ID for output directories.
@@ -228,13 +231,14 @@ def preparingDataset(id, mount_dir, anatomical_struct="Brain", start=0, stop=9, 
         crop_sz (int): Size for cropping images.
         downsample_sz (int): Size for downsampling images.
         is_synthetic (bool): Flag indicating synthetic or real data.
-        
+        batch_size (int): Maximum number of patients to process in a single batch.
 
     Returns:
         dict: Combined parameter dictionary for all patients.
     """
-        
-    datasetPath = "/mnt/Drive4/jonas/datasets/synthetic_FK_Michals_solver_smaller/"
+    import math
+
+    datasetPath = '/mnt/Drive4/jonas/datasets/synthetic_FK_DTI_in_Atlas_STD3/'#"/mnt/Drive4/jonas/datasets/synthetic_FK_Michals_solver_smaller/"
     atlasTissue = nib.load("/home/home/yeray_jonas/tumornetsolvers/sub-mni152_tissues_space-sri.nii.gz")
     patients = np.sort(os.listdir(datasetPath))
 
@@ -243,24 +247,39 @@ def preparingDataset(id, mount_dir, anatomical_struct="Brain", start=0, stop=9, 
     if stop > len(patients):
         stop = len(patients)
 
-    patients_to_process = patients[start:stop]
     all_param_dicts = []
 
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        futures = [
-            executor.submit(process_patient, patient, atlasTissue, id, datasetPath, mount_dir, crop_sz, downsample_sz, anatomical_struct, is_synthetic)
-            for patient in patients_to_process
-        ]
+    for batch_start in range(start, stop, batch_size):
+        batch_end = min(batch_start + batch_size, stop)
+        patients_to_process = patients[batch_start:batch_end]
 
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                param_dict = future.result()
-                all_param_dicts.append(param_dict)
-            except Exception as e:
-                print(f"An error occurred: {e}")
+        print(f"Processing batch: {batch_start} to {batch_end} ({len(patients_to_process)} patients)")
 
-    combined_param_dict = {k: v for d in all_param_dicts for k, v in d.items()} 
-    return combined_param_dict  
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            futures = [
+                executor.submit(
+                    process_patient,
+                    patient,
+                    atlasTissue,
+                    id,
+                    datasetPath,
+                    mount_dir,
+                    crop_sz,
+                    downsample_sz,
+                    anatomical_struct,
+                    is_synthetic
+                ) for patient in patients_to_process
+            ]
+
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    param_dict = future.result()
+                    all_param_dicts.append(param_dict)
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+
+    combined_param_dict = {k: v for d in all_param_dicts for k, v in d.items()}
+    return combined_param_dict 
 
 
 def create_json_file(param_dict, raw_dataset_path, comment=""):
