@@ -35,33 +35,93 @@ class ConvLayer3D(nn.Module):
         return x
 
 class ManyfoldConvBlock3D(nn.Module):
-    def __init__(self, layers, shortcut, skip_pos):
+    def __init__(self, layers, shortcut, skip_pos, linear_layer=None, experiment=None, param_dim=5, width=None):
         super(ManyfoldConvBlock3D, self).__init__()
         self.skip_pos = skip_pos
         self.layers = nn.ModuleList(layers)
         self.shortcut = shortcut
+        self.linear_layer=linear_layer
+        self.experiment = experiment
+        self.param_dim = param_dim
+        self.width = width
 
-    def forward(self, x, skip_x=None):
+    def forward(self, x, skip_x=None, params=None):
         if skip_x is None:  # encoder
             skip_x = self.shortcut(x)
         else:  # decoder
             skip_x = self.shortcut(skip_x)
+
+        last_idx = len(self.layers) - 1
         for i, layer in enumerate(self.layers):
+            if i == last_idx:
+                # Use self.linear_layer as param_fc applied on params
+                if params is not None:
+                    if self.experiment[1] == "b_downsampling":
+                        # Apply param_fc (linear layer) on params
+                        param_proj = self.linear_layer(params)
+
+                        B = x.shape[0]
+                        spatial_shape = x.shape[-3:]  # spatial shape before last conv
+
+                        if self.experiment[0] == "c":
+                            param_proj = param_proj.view(B, self.param_dim, *spatial_shape)
+                            x = torch.cat((x, param_proj), dim=1)
+                        elif self.experiment[0] == "a":
+                            param_proj = param_proj.view(B, x.shape[1], *spatial_shape)
+                            x = x + param_proj  # broadcasted addition
+
+            elif i == 0:
+                if params is not None:
+                    if self.experiment[1] == "a_downsampling":
+                        # Apply param_fc (linear layer) on params
+                        param_proj = self.linear_layer(params)
+
+                        B = x.shape[0]
+                        spatial_shape = x.shape[-3:]  # spatial shape before last conv
+
+                        if self.experiment[0] == "c":
+                            param_proj = param_proj.view(B, self.param_dim, *spatial_shape)
+                            x = torch.cat((x, param_proj), dim=1)
+                        elif self.experiment[0] == "a":
+                            param_proj = param_proj.view(B, x.shape[1], *spatial_shape)
+                            x = x + param_proj  # broadcasted addition
+
             x = layer(x)
-            if i == self.skip_pos:
-                x = x + skip_x
+
+        if i == self.skip_pos:
+            x = x + skip_x
         return x
 
 class TumorSurrogate(nn.Module):
-    def __init__(self, widths, n_cells, strides):
+    def __init__(self, widths, n_cells, strides, experiment, inputs_shape, param_dim):
         super().__init__()
         input_channel = 1  # Changed input channels to 1 for single channel input
+        data_sz = list(inputs_shape[-3:])[0]  # e.g., [64, 64, 64]
+        self.experiment = experiment
+        self.param_dim = param_dim
+
+        if experiment[1] == "inputs":
+            if experiment[0] == "c":
+                self.param_fc = nn.Linear(
+                    in_features=param_dim,
+                    out_features=data_sz ** 3 * param_dim
+                )
+                input_channel += param_dim
+            elif experiment[0] == "a":
+                self.param_fc = nn.Linear(
+                    in_features=param_dim,
+                    out_features=data_sz ** 3 * input_channel
+                )
         first_conv = ConvLayer3D(
-            1, input_channel, kernel_size=3, stride=1, use_bn=True
+            input_channel, input_channel, kernel_size=3, stride=1, use_bn=True
         )
 
+        first_conv_flag = True
         encoder_blocks = [first_conv]
+        prev_s = None
         for width, n_cell, s in zip(widths, n_cells, strides):
+            if prev_s == None:
+                prev_s = s
             conv_layers = []
             shortcut = IdentityLayer()
             if s == 1:
@@ -71,22 +131,94 @@ class TumorSurrogate(nn.Module):
             for i in range(n_cell):
                 if i == n_cell - 1:  # last layer of block is pooling or stride conv
                     stride = s
+                    if experiment[1] == "b_downsampling":
+                        if experiment[0] == "c":
+                            self.param_fc = nn.Linear(
+                                in_features=param_dim,
+                                out_features=data_sz ** 3 * param_dim
+                            )
+                            input_channel += param_dim
+                        elif experiment[0] == "a":
+                            self.param_fc = nn.Linear(
+                                in_features=param_dim,
+                                out_features=data_sz ** 3 * input_channel
+                            )
+                        data_sz = data_sz // s
                 else:
                     stride = 1
+
+                if i == 0 and experiment[1] == "a_downsampling" and not first_conv_flag:
+                    data_sz = data_sz // prev_s
+                    prev_s = s
+
+                    if experiment[0] == "c":
+                        self.param_fc = nn.Linear(
+                                in_features=param_dim,
+                                out_features=data_sz ** 3 * param_dim
+                            )
+                        input_channel += param_dim
+                    elif experiment[0] == "a":
+                        self.param_fc = nn.Linear(
+                                in_features=param_dim,
+                                out_features=data_sz ** 3 * input_channel
+                            )
                 conv_op = ConvLayer3D(in_channels=input_channel, out_channels=width, kernel_size=3, stride=stride, use_bn=True)
                 conv_layers.append(conv_op)
                 input_channel = width
+                
 
-            conv_block = ManyfoldConvBlock3D(conv_layers, shortcut, skip_pos=skip_pos)
+
+            if experiment[1] == "b_downsampling" or (experiment[1] == "a_downsampling" and not first_conv_flag):
+                conv_block = ManyfoldConvBlock3D(conv_layers, shortcut, skip_pos=skip_pos, linear_layer=self.param_fc, experiment=experiment, width=width)
+            else:
+                conv_block = ManyfoldConvBlock3D(conv_layers, shortcut, skip_pos=skip_pos)
             encoder_blocks.append(conv_block)
 
+            if first_conv_flag:
+                first_conv_flag=False
+
+
+        if experiment[1] == "b_bottleneck":
+            for stride in strides:
+                data_sz = data_sz // stride
+        
+        if experiment[1] == "b_bottleneck" or experiment[1] == "a_downsampling":
+            if experiment[0] == "c":
+                self.param_fc = nn.Linear(
+                    in_features=param_dim,
+                    out_features=data_sz ** 3 * param_dim
+                )
+                input_channel += param_dim
+            elif experiment[0] == "a":
+                self.param_fc = nn.Linear(
+                    in_features=param_dim,
+                    out_features=data_sz ** 3 * input_channel
+                )
+
         mid_conv = ConvLayer3D(
-            input_channel, input_channel - 3, kernel_size=3, stride=1
+            input_channel, widths[-1], kernel_size=3, stride=1
         )
+        input_channel = widths[-1]
         encoder_blocks.append(mid_conv)
 
+        if experiment[1] == "a_bottleneck":
+            for stride in strides:
+                data_sz = data_sz // stride
+
+            if experiment[0] == "c":
+                self.param_fc = nn.Linear(
+                    in_features=param_dim,
+                    out_features=data_sz ** 3 * param_dim
+                )
+                input_channel += param_dim
+            elif experiment[0] == "a":
+                self.param_fc = nn.Linear(
+                    in_features=param_dim,
+                    out_features=data_sz ** 3 * input_channel
+                )
+
         decoder_blocks = []
-        n_cells_decoder = [x + 1 for x in n_cells]
+        n_cells_decoder = [x + 1 for x in n_cells] # Augmented since the upsampling is done via an extra layer
         for width, n_cell, s in zip(widths, n_cells_decoder, strides):
             conv_layers = []
             if s == 1:
@@ -104,7 +236,7 @@ class TumorSurrogate(nn.Module):
                 input_channel = width
             conv_block = ManyfoldConvBlock3D(conv_layers, shortcut, skip_pos=skip_pos)
             decoder_blocks.append(conv_block)
-            if s != 1:
+            if s != 1: # Since an upsample layer is inserted for the upsampling an extra convolution is required
                 after_upscale_conv = ConvLayer3D(
                     in_channels=input_channel, out_channels=width,
                     kernel_size=3, stride=1
@@ -119,19 +251,66 @@ class TumorSurrogate(nn.Module):
 
         self.encoder_blocks = nn.ModuleList(encoder_blocks)
         self.decoder_blocks = nn.ModuleList(decoder_blocks)
-        self.parameter_encoder = nn.Linear(in_features=5, out_features=3 * 8 * 8 * 8)
 
     def forward(self, x, parameters):
-        for block in self.encoder_blocks:
-            x = block(x)
-        parameters = self.parameter_encoder(parameters).view(-1, 8, 8, 8, 3).permute(0, 4, 1, 2, 3)
-        x = torch.cat((parameters, x), dim=1)
+        skips = []
+        out = x
 
-        skip_x = x
+        # If param injection happens at the input level
+        if self.experiment[1] == "inputs":
+            B = x.shape[0]
+            spatial_shape = list(x.shape[-3:])  # assuming NCDHW
+
+            param_proj = self.param_fc(parameters)
+
+            if self.experiment[0] == "c":
+                param_proj = param_proj.view(B, self.param_dim, *spatial_shape)
+                out = torch.cat((out, param_proj), dim=1)
+            elif self.experiment[0] == "a":
+                param_proj = param_proj.view(B, out.shape[1], *spatial_shape)
+                out = out + param_proj
+
+        for s, block in enumerate(self.encoder_blocks):
+            if isinstance(block, ManyfoldConvBlock3D):
+                if self.experiment[1] == "b_downsampling" or (self.experiment[1] == "a_downsampling" and s > 1): # s=0 is input convolution, s=1 is the one after not of interest on the current implementation of a_downsampling
+                    out = block(out, skip_x = None, params=parameters)
+                else:
+                    out = block(out)
+                skips.append(out)
+
+            else:
+                if s == len(self.encoder_blocks) - 1 and (self.experiment[1] == "b_bottleneck" or self.experiment[1] == "a_downsampling"):
+                    B = x.shape[0]
+                    spatial_shape = out.shape[-3:]
+                    param_proj = self.param_fc(parameters)
+
+                    if self.experiment[0] == "c":
+                        param_proj = param_proj.view(B, self.param_dim, *spatial_shape)
+                        out = torch.cat((out, param_proj), dim=1)
+                    elif self.experiment[0] == "a":
+                        param_proj = param_proj.view(B, out.shape[1], *spatial_shape)
+                        out = out + param_proj
+                out = block(out)  # first conv or mid_conv
+
+        # For b_bottleneck or a_bottleneck injection
+        if self.experiment[1] == "a_bottleneck":
+            B = x.shape[0]
+            spatial_shape = out.shape[-3:]
+            param_proj = self.param_fc(parameters)
+
+            if self.experiment[0] == "c":
+                param_proj = param_proj.view(B, self.param_dim, *spatial_shape)
+                out = torch.cat((out, param_proj), dim=1)
+            elif self.experiment[0] == "a":
+                param_proj = param_proj.view(B, out.shape[1], *spatial_shape)
+                out = out + param_proj
+
+        skip_x = out
         for idx, block in enumerate(self.decoder_blocks):
             if isinstance(block, ManyfoldConvBlock3D):
-                x = block(x, skip_x=skip_x)
+                out = block(out, skip_x=skip_x)
             else:
-                skip_x = x
-                x = block(x)
-        return F.sigmoid(x)
+                skip_x = out
+                out = block(out)
+
+        return torch.sigmoid(out)
