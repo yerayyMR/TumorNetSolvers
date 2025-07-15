@@ -1,0 +1,132 @@
+{
+    "aMSE": {
+        "Mean \u00b1 SE": "0.00140280 \u00b1 0.00006464",
+        "Median \u00b1 IQR": "0.00129708 \u00b1 0.00154727"
+    },
+    "MAE": {
+        "Mean \u00b1 SE": "0.00993245 \u00b1 0.00032469",
+        "Median \u00b1 IQR": "0.00917107 \u00b1 0.00834406"
+    },
+    "SSIM": {
+        "Mean \u00b1 SE": "0.94479640 \u00b1 0.00165116",
+        "Median \u00b1 IQR": "0.94689736 \u00b1 0.02507128"
+    },
+    "Dice_0.1": {
+        "Mean \u00b1 SE": "0.90534322 \u00b1 0.01146643",
+        "Median \u00b1 IQR": "0.95171991 \u00b1 0.01467459",
+        "Highest Dice Sample": [
+            "BRAIN_p642.npy",
+            0.9640185832977295
+        ],
+        "Lowest Dice Sample": [
+            "BRAIN_p788.npy",
+            0.0
+        ]
+    },
+    "Dice_0.2": {
+        "Mean \u00b1 SE": "0.90351605 \u00b1 0.01297743",
+        "Median \u00b1 IQR": "0.95467708 \u00b1 0.01430939",
+        "Highest Dice Sample": [
+            "BRAIN_p281.npy",
+            0.9677157998085022
+        ],
+        "Lowest Dice Sample": [
+            "BRAIN_p731.npy",
+            0.0
+        ]
+    },
+    "Dice_0.3": {
+        "Mean \u00b1 SE": "0.90061903 \u00b1 0.01364050",
+        "Median \u00b1 IQR": "0.95552781 \u00b1 0.01551594",
+        "Highest Dice Sample": [
+            "BRAIN_p281.npy",
+            0.9678667187690735
+        ],
+        "Lowest Dice Sample": [
+            "BRAIN_p731.npy",
+            0.0
+        ]
+    },
+    "Dice_0.4": {
+        "Mean \u00b1 SE": "0.89007992 \u00b1 0.01540838",
+        "Median \u00b1 IQR": "0.95609567 \u00b1 0.01724355",
+        "Highest Dice Sample": [
+            "BRAIN_p281.npy",
+            0.9689117074012756
+        ],
+        "Lowest Dice Sample": [
+            "BRAIN_p731.npy",
+            0.0
+        ]
+    },
+    "Dice_0.5": {
+        "Mean \u00b1 SE": "0.88116149 \u00b1 0.01617924",
+        "Median \u00b1 IQR": "0.95415324 \u00b1 0.01919304",
+        "Highest Dice Sample": [
+            "BRAIN_p281.npy",
+            0.9676842093467712
+        ],
+        "Lowest Dice Sample": [
+            "BRAIN_p731.npy",
+            0.0
+        ]
+    },
+    "Dice_0.6": {
+        "Mean \u00b1 SE": "0.86649061 \u00b1 0.01677981",
+        "Median \u00b1 IQR": "0.95075697 \u00b1 0.02690057",
+        "Highest Dice Sample": [
+            "BRAIN_p281.npy",
+            0.9661142826080322
+        ],
+        "Lowest Dice Sample": [
+            "BRAIN_p731.npy",
+            0.0
+        ]
+    },
+    "Dice_0.7": {
+        "Mean \u00b1 SE": "0.83661333 \u00b1 0.01848670",
+        "Median \u00b1 IQR": "0.93977189 \u00b1 0.04569490",
+        "Highest Dice Sample": [
+            "BRAIN_p281.npy",
+            0.9593886137008667
+        ],
+        "Lowest Dice Sample": [
+            "BRAIN_p731.npy",
+            0.0
+        ]
+    },
+    "Dice_0.8": {
+        "Mean \u00b1 SE": "0.79440751 \u00b1 0.02002419",
+        "Median \u00b1 IQR": "0.91792685 \u00b1 0.08287096",
+        "Highest Dice Sample": [
+            "BRAIN_p922.npy",
+            0.9449376463890076
+        ],
+        "Lowest Dice Sample": [
+            "BRAIN_p731.npy",
+            0.0
+        ]
+    },
+    "Dice_0.9": {
+        "Mean \u00b1 SE": "0.71920244 \u00b1 0.02028166",
+        "Median \u00b1 IQR": "0.85023189 \u00b1 0.19239299",
+        "Highest Dice Sample": [
+            "BRAIN_p746.npy",
+            0.9189724922180176
+        ],
+        "Lowest Dice Sample": [
+            "BRAIN_p275.npy",
+            0.0
+        ]
+    },
+    "MSE_Extremes": {
+        "lowest_mse_file": [
+            "BRAIN_p135.npy",
+            8.397593046538532e-05
+        ],
+        "highest_mse_file": [
+            "BRAIN_p647.npy",
+            0.004029185511171818
+        ]
+    }
+}
