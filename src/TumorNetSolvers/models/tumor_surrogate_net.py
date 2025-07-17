@@ -55,7 +55,7 @@ class ManyfoldConvBlock3D(nn.Module):
         for i, layer in enumerate(self.layers):
             if i == last_idx:
                 # Use self.linear_layer as param_fc applied on params
-                if params is not None:
+                if self.param_dim > 0 and params is not None:
                     if self.experiment[1] == "b_downsampling":
                         # Apply param_fc (linear layer) on params
                         param_proj = self.linear_layer(params)
@@ -71,7 +71,7 @@ class ManyfoldConvBlock3D(nn.Module):
                             x = x + param_proj  # broadcasted addition
 
             elif i == 0:
-                if params is not None:
+                if self.param_dim > 0 and params is not None:
                     if self.experiment[1] == "a_downsampling":
                         # Apply param_fc (linear layer) on params
                         param_proj = self.linear_layer(params)
@@ -88,8 +88,8 @@ class ManyfoldConvBlock3D(nn.Module):
 
             x = layer(x)
 
-        if i == self.skip_pos:
-            x = x + skip_x
+            if i == self.skip_pos:
+                x = x + skip_x
         return x
 
 class TumorSurrogate(nn.Module):
@@ -100,7 +100,7 @@ class TumorSurrogate(nn.Module):
         self.experiment = experiment
         self.param_dim = param_dim
 
-        if experiment[1] == "inputs":
+        if experiment[1] == "inputs" and self.param_dim > 0:
             if experiment[0] == "c":
                 self.param_fc = nn.Linear(
                     in_features=param_dim,
@@ -113,7 +113,7 @@ class TumorSurrogate(nn.Module):
                     out_features=data_sz ** 3 * input_channel
                 )
         first_conv = ConvLayer3D(
-            input_channel, input_channel, kernel_size=3, stride=1, use_bn=True
+            input_channel, 1, kernel_size=3, stride=1, use_bn=True
         )
 
         first_conv_flag = True
@@ -131,7 +131,7 @@ class TumorSurrogate(nn.Module):
             for i in range(n_cell):
                 if i == n_cell - 1:  # last layer of block is pooling or stride conv
                     stride = s
-                    if experiment[1] == "b_downsampling":
+                    if experiment[1] == "b_downsampling" and self.param_dim > 0 and stride != 1:
                         if experiment[0] == "c":
                             self.param_fc = nn.Linear(
                                 in_features=param_dim,
@@ -147,7 +147,7 @@ class TumorSurrogate(nn.Module):
                 else:
                     stride = 1
 
-                if i == 0 and experiment[1] == "a_downsampling" and not first_conv_flag:
+                if i == 0 and experiment[1] == "a_downsampling" and not first_conv_flag and self.param_dim > 0:
                     data_sz = data_sz // prev_s
                     prev_s = s
 
@@ -168,7 +168,7 @@ class TumorSurrogate(nn.Module):
                 
 
 
-            if experiment[1] == "b_downsampling" or (experiment[1] == "a_downsampling" and not first_conv_flag):
+            if ((experiment[1] == "b_downsampling" and s != 1) or (experiment[1] == "a_downsampling" and not first_conv_flag)) and self.param_dim > 0:
                 conv_block = ManyfoldConvBlock3D(conv_layers, shortcut, skip_pos=skip_pos, linear_layer=self.param_fc, experiment=experiment, width=width)
             else:
                 conv_block = ManyfoldConvBlock3D(conv_layers, shortcut, skip_pos=skip_pos)
@@ -178,11 +178,11 @@ class TumorSurrogate(nn.Module):
                 first_conv_flag=False
 
 
-        if experiment[1] == "b_bottleneck":
+        if experiment[1] == "b_bottleneck" and self.param_dim > 0:
             for stride in strides:
                 data_sz = data_sz // stride
         
-        if experiment[1] == "b_bottleneck" or experiment[1] == "a_downsampling":
+        if (experiment[1] == "b_bottleneck") and self.param_dim > 0: # (experiment[1] == "b_bottleneck" or experiment[1] == "a_downsampling") and self.param_dim > 0: 
             if experiment[0] == "c":
                 self.param_fc = nn.Linear(
                     in_features=param_dim,
@@ -195,13 +195,20 @@ class TumorSurrogate(nn.Module):
                     out_features=data_sz ** 3 * input_channel
                 )
 
-        mid_conv = ConvLayer3D(
-            input_channel, widths[-1], kernel_size=3, stride=1
-        )
-        input_channel = widths[-1]
-        encoder_blocks.append(mid_conv)
+        if experiment[1] == "a_bottleneck" and experiment[0] == "c" and self.param_dim > 0:
+            mid_conv = ConvLayer3D(
+                input_channel, widths[-1] - 5, kernel_size=3, stride=1
+            )
+            input_channel = widths[-1] - 5
+            encoder_blocks.append(mid_conv)
+        else:
+            mid_conv = ConvLayer3D(
+                input_channel, widths[-1], kernel_size=3, stride=1
+            )
+            input_channel = widths[-1]
+            encoder_blocks.append(mid_conv)
 
-        if experiment[1] == "a_bottleneck":
+        if experiment[1] == "a_bottleneck" and self.param_dim > 0:
             for stride in strides:
                 data_sz = data_sz // stride
 
@@ -257,7 +264,7 @@ class TumorSurrogate(nn.Module):
         out = x
 
         # If param injection happens at the input level
-        if self.experiment[1] == "inputs":
+        if self.experiment[1] == "inputs" and self.param_dim > 0:
             B = x.shape[0]
             spatial_shape = list(x.shape[-3:])  # assuming NCDHW
 
@@ -272,14 +279,14 @@ class TumorSurrogate(nn.Module):
 
         for s, block in enumerate(self.encoder_blocks):
             if isinstance(block, ManyfoldConvBlock3D):
-                if self.experiment[1] == "b_downsampling" or (self.experiment[1] == "a_downsampling" and s > 1): # s=0 is input convolution, s=1 is the one after not of interest on the current implementation of a_downsampling
+                if ((self.experiment[1] == "b_downsampling" and s != 4) or (self.experiment[1] == "a_downsampling" and s > 1)) and self.param_dim > 0: # s=0 is input convolution, s=1 is the one after not of interest on the current implementation of a_downsampling
                     out = block(out, skip_x = None, params=parameters)
                 else:
                     out = block(out)
                 skips.append(out)
 
             else:
-                if s == len(self.encoder_blocks) - 1 and (self.experiment[1] == "b_bottleneck" or self.experiment[1] == "a_downsampling"):
+                if s == len(self.encoder_blocks) - 1 and (self.experiment[1] == "b_bottleneck") and self.param_dim > 0: #s == len(self.encoder_blocks) - 1 and (self.experiment[1] == "b_bottleneck" or self.experiment[1] == "a_downsampling") and self.param_dim > 0: 
                     B = x.shape[0]
                     spatial_shape = out.shape[-3:]
                     param_proj = self.param_fc(parameters)
@@ -293,7 +300,7 @@ class TumorSurrogate(nn.Module):
                 out = block(out)  # first conv or mid_conv
 
         # For b_bottleneck or a_bottleneck injection
-        if self.experiment[1] == "a_bottleneck":
+        if self.experiment[1] == "a_bottleneck" and self.param_dim > 0:
             B = x.shape[0]
             spatial_shape = out.shape[-3:]
             param_proj = self.param_fc(parameters)
