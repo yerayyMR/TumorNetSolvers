@@ -29,7 +29,7 @@
 #%%
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="4"
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))  # scripts directory
 src_path = os.path.abspath(os.path.join(current_dir, '..', 'src'))
@@ -58,12 +58,12 @@ from TumorNetSolvers.reg_nnUnet.experiment_planning.plan_and_preprocess_api impo
 
 # ============ Data Preparation ============
 # Configuration
-DATASET_ID = 300  # Must be in XXX format
+DATASET_ID = 400  # Must be in XXX format
 ANATOMICAL_STRUCTURE = "Brain"
 MOUNT_DIR = "/mnt/Drive3/yeray_jonas/TumorNetSolvers_ext/data_and_outputs"
 CROP_SIZE = 120  # Image crop size
 DOWNSAMPLE_SIZE = 64  # Downsample size
-PATIENT_RANGE = (0, 6000)  # Patients to process (start, stop)
+PATIENT_RANGE = (0, 1)  # Patients to process (start, stop)
 
 # Ensure required directories exist
 for sub_dir in ['raw_data', 'preprocessed_data', 'results']:

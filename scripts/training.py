@@ -13,7 +13,7 @@ Outputs:
 """
 #%%
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 os.environ['WANDB_DIR'] = '/home/home/yeray_jonas/tumornetsolvers/wandb'
 import sys
@@ -34,7 +34,7 @@ nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
 # ============ Configuration ============
 
 # Define the dataset and training configuration
-DATASET_NAME = 'Dataset300_Brain'  
+DATASET_NAME = 'Dataset900_Brain'  
 TRAINING_CONFIGURATION = '3d_fullres'  # '2d', '3d_lowres', '3d_fullres', etc.
 DEVICE = torch.device('cuda:0')
 
@@ -52,9 +52,10 @@ SIGNATURE = "10k"  # Unique signature for logging and reproducibility
     ['Linear', 'embed_concat'],
     ['MLP', 'embed_add'],
     ['Linear', 'embed_add']]'''
-EXPERIMENTS = [['Linear', 'embed_concat']]
+EXPERIMENTS = [['MLP', 'mul_token']]
 
 #[['c', 'a_downsampling']]
+#[['c', 'b_downsampling']]
 
 # ============ Load Training Plans and Dataset ============
 

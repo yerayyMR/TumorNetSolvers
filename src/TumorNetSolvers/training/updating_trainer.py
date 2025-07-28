@@ -130,11 +130,11 @@ class Trainer(object):
                                        self.__class__.__name__ + '__' + self.plans_manager.plans_name + "__" + configuration) \
             if nnUNet_results is not None else None
         if self.model == "ViT":
-            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'MODE_{self.experiments[1]}_METHOD_{self.experiments[0]}_best_FK_785')
+            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'MODE_{self.experiments[1]}_METHOD_{self.experiments[0]}_check')
         elif self.model == "TumorSurrogate":
-            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', 'correctResNet', f'LOC_{self.experiments[1]}_MODE_{self.experiments[0]}_new') #_og
+            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', 'correctResNet', f'LOC_{self.experiments[1]}_MODE_{self.experiments[0]}_check') #_og
         else:
-            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'LOC_{self.experiments[1]}_MODE_{self.experiments[0]}_new')
+            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'LOC_{self.experiments[1]}_MODE_{self.experiments[0]}_check')
         #self.output_folder_models = join(self.output_folder, 'models_extra')
 
         self.preprocessed_dataset_folder = join(self.preprocessed_dataset_folder_base,
@@ -209,7 +209,7 @@ class Trainer(object):
         ## DDP batch size and oversampling can differ between workers and needs adaptation
         # we need to change the batch size in DDP because we don't use any of those distributed samplers
         self._set_batch_size()
-        #self.batch_size = 51
+        #self.batch_size = 36
         self.project_name=project_name #"NN-based-tumor-solvers"
 
         tr_dataset, val_dataset = self.get_tr_and_val_datasets()
@@ -217,9 +217,9 @@ class Trainer(object):
         self.num_val_iterations_per_epoch = int(len(val_dataset)//(self.batch_size))
 
         if self.model == "ViT":
-            wandb.init(project=self.project_name, name=f"[{self.model} - Best FK 785] Mode: {self.experiments[1]}, Method: {self.experiments[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
+            wandb.init(project=self.project_name, name=f"[{self.model} - Check] Mode: {self.experiments[1]}, Method: {self.experiments[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
         else:
-            wandb.init(project=self.project_name, name=f"[{self.model} - ResNet] Loc: {self.experiments[1]}, Mode: {self.experiments[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
+            wandb.init(project=self.project_name, name=f"[{self.model} - ResNet 7] Loc: {self.experiments[1]}, Mode: {self.experiments[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
         
         self.was_initialized = False
         
@@ -1113,7 +1113,7 @@ class Trainer(object):
         current_epoch = self.current_epoch
 
         elapsed_time = time() - self.start_time
-        self.save_every_hours = 6 * 3600
+        self.save_every_hours = 3 * 3600
         if elapsed_time > self.save_every_hours:
             self.save_checkpoint(join(self.output_folder, f'checkpoint_epoch_{current_epoch}_6h.pth'))
             #os.remove(join(self.output_folder, f'checkpoint_epoch_{self.previous_epoch_saved}.pth'))
@@ -1345,8 +1345,8 @@ class Trainer(object):
         
         save_frequency = 1
 
-        #self.load_checkpoint('/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/Dataset900_Brain/Trainer__nnUNetPlans__3d_fullres/fold_train_val_test/_10k_TumorSurrogate/LOC_a_downsampling_MODE_c_best_FK_51/checkpoint_epoch_115_3h.pth') # 
-        #self.current_epoch = 116
+        #self.load_checkpoint('/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/Dataset900_Brain/Trainer__nnUNetPlans__3d_fullres/fold_train_val_test/_10k_TumorSurrogate/correctResNet/LOC_a_upsampling_after_MODE_a_new7/checkpoint_epoch_200.pth') # 
+        #self.current_epoch = 201
         self.name = wandb.run.name
         for epoch in range(self.current_epoch, self.num_epochs):
             print(f"Epoch {epoch}: ")

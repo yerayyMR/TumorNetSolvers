@@ -56,7 +56,7 @@ class PlainConvEncoder(nn.Module):
                  nonlin_first: bool = False,
                  inputs_shape: torch.Size = None,
                  pool: str = 'conv',
-                 param_dim: int = 0,
+                 param_dim: int = 5,
                  experiments: List[List[str]] = None
                  ):
 

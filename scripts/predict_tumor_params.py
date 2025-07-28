@@ -27,7 +27,7 @@ Example usage:
 import os
 import time
 import sys
-
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 from set_env import set_environment_variables
 set_environment_variables()
 
@@ -131,7 +131,7 @@ def infer_parameters(dataset_name: str, model: str, data_folder: str, output_bas
         else:
             raise ValueError("Unexpected batch structure")
 
-        if keys[0] == 'BRAIN_p1':
+        if keys[0] == 'BRAIN_p123':
             filter= lambda x : (x>0)*x
             target = filter(target)
             data = data.to(device, non_blocking=True)

@@ -21,7 +21,7 @@ Outputs:
 """
 # %% Performance Evaluation and Statistical Analysis
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))  # scripts directory
 src_path = os.path.abspath(os.path.join(current_dir, '..', 'src'))
@@ -36,30 +36,27 @@ set_environment_variables()
 
 # Define environment variables
 nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
-nnUNet_results = os.getenv('nnUNet_results')
+#nnUNet_results = os.getenv('nnUNet_results')
+nnUNet_results = os.path.join('/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/', "results")
 
 # Configuration
 DATASET_NAME = 'Dataset900_Brain' 
-MODELS = ['nnUnet']  # List of models for evaluation
+MODELS = ['ViT']  # List of models for evaluation
 SIGNATURE = '10k'
 MASKED = False  # Binary flag for masked evaluation
 
-'''EXPERIMENTS = [ ['c', 'a_downsampling'], ['a', 'a_downsampling'],
-                    ['c', 'b_downsampling'], ['a', 'b_downsampling'],
-                    ['c', 'inputs'], ['a', 'inputs'],
-                    ['c', 'b_bottleneck'], ['a', 'b_bottleneck'],
-                    ['c', 'a_bottleneck'], ['a', 'a_bottleneck']]'''
+EXPERIMENTS = [['Linear', 'mul_token']]
 
-EXPERIMENTS = [ ['a', 'b_upsampling'], ['c', 'b_upsampling'],
-                    ['a', 'a_upsampling'], ['c', 'a_upsampling'],
-                    ['a', 'a_upsampling_skip']]
+#EXPERIMENTS = [ ['c', 'a_downsampling']]
 
 for experiment in EXPERIMENTS:
     # Define output directory for performance summaries
     if MODELS[0] == "ViT":
-        summary_dir = os.path.join("performance_summaries", DATASET_NAME , MODELS[0], f'MODE_{experiment[1]}_METHOD_{experiment[0]}_og')
-    else:
+        summary_dir = os.path.join("performance_summaries", DATASET_NAME , MODELS[0], f'MODE_{experiment[1]}_METHOD_{experiment[0]}')
+    elif MODELS[0] == "nnUnet":
         summary_dir = os.path.join("performance_summaries", DATASET_NAME , MODELS[0], f'LOC_{experiment[1]}_MODE_{experiment[0]}')
+    else:
+        summary_dir = os.path.join("performance_summaries", DATASET_NAME , MODELS[0], 'correctResNet', f'LOC_{experiment[1]}_MODE_{experiment[0]}')
     os.makedirs(summary_dir, exist_ok=True)
 
     # Determine ground truth folder
@@ -73,16 +70,21 @@ for experiment in EXPERIMENTS:
     # Evaluate each model
     for MODEL in MODELS:
         # Determine predictions folder
-        if MODELS[0] == "ViT":
+        if MODEL == "ViT":
             if MASKED:
-                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, f'MODE_{experiment[1]}_METHOD_{experiment[0]}_og', 'preds', f'_{MODEL}_{SIGNATURE}/masked')
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, MODEL, f'MODE_{experiment[1]}_METHOD_{experiment[0]}_check', 'preds', f'_{MODEL}_{SIGNATURE}/masked')
             else:
-                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, f'MODE_{experiment[1]}_METHOD_{experiment[0]}_og', 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, MODEL, f'MODE_{experiment[1]}_METHOD_{experiment[0]}_check', 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
+        elif MODEL == "nnUnet":
+            if MASKED:
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, MODEL, f'LOC_{experiment[1]}_MODE_{experiment[0]}_check', 'preds', f'_{MODEL}_{SIGNATURE}/masked')
+            else:
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, MODEL, f'LOC_{experiment[1]}_MODE_{experiment[0]}_check', 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
         else:
             if MASKED:
-                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, f'LOC_{experiment[1]}_MODE_{experiment[0]}', 'preds', f'_{MODEL}_{SIGNATURE}/masked')
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, MODEL, 'correctResNet', f'LOC_{experiment[1]}_MODE_{experiment[0]}_check', 'preds', f'_{MODEL}_{SIGNATURE}/masked')
             else:
-                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, f'LOC_{experiment[1]}_MODE_{experiment[0]}', 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
+                PREDS_FOLDER = os.path.join(nnUNet_results, DATASET_NAME, MODEL, 'correctResNet', f'LOC_{experiment[1]}_MODE_{experiment[0]}_check', 'preds', f'_{MODEL}_{SIGNATURE}/notMasked')
 
         # Validate folders
         if not os.path.exists(PREDS_FOLDER):
