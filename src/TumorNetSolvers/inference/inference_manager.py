@@ -97,7 +97,7 @@ class InferenceManager:
                 norm_layer=None, act_layer=None, weight_init='', global_pool=False, param_dim=5, experiment=self.experiment
             ).to(self.device)
         elif self.model == "TumorSurrogate":
-            model = TumorSurrogate(widths=[64, 64, 64, 64], n_cells=[4, 3, 3, 2], strides=[2, 2, 2, 1], experiment=self.experiment, inputs_shape=self.shape_data, param_dim=5)
+            model = TumorSurrogate(widths=[64, 64, 64, 64], n_cells=[3, 3, 3, 2], strides=[2, 2, 2, 1], experiment=self.experiment, inputs_shape=self.shape_data, param_dim=5)
             return model.to(self.device)
         elif self.model == "nnUnet":
             # Initialize nnUnet model for inference
