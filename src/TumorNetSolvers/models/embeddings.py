@@ -62,8 +62,21 @@ class ParameterEmbedding(nn.Module):
                 raise ValueError(f"Unsupported method: {method}")
 
         elif mode == "mul_token":
+            #if method == "MLP":
+            #    self.projection = _build_mlp(1, embed_dim, hidden_dims)
+            self.projections = nn.ModuleList()
             if method == "MLP":
-                self.projection = _build_mlp(1, embed_dim, hidden_dims)
+                for _ in range(param_dim):
+                    self.projections.append(_build_mlp(1, embed_dim, hidden_dims))
+            elif method == "Linear":
+                for _ in range(param_dim):
+                    self.projections.append(nn.Linear(1, embed_dim))
+            elif method == "MLP_ext":
+                self.projection = _build_mlp(param_dim, embed_dim * param_dim, hidden_dims)
+            elif method == "Linear_ext":
+                self.projection = nn.Linear(param_dim, embed_dim * param_dim)
+            #elif method == "Linear":
+                self.projection = nn.Linear(1, embed_dim)
             else:
                 raise ValueError(f"Unsupported method for mul_token: {method}")
 
@@ -101,12 +114,23 @@ class ParameterEmbedding(nn.Module):
             return out
 
         elif mode == "mul_token":
-            tokens = []
-            for i in range(self.param_dim):
-                param_i = x[:, i:i+1]            # (B, 1)
-                token_i = self.projection(param_i)  # (B, embed_dim)
-                tokens.append(token_i.unsqueeze(1)) # (B, 1, embed_dim)
-            out = torch.cat(tokens, dim=1)       # (B, param_dim, embed_dim)
+            '''if method == "MLP" or method == "Linear":
+                tokens = []
+                for i in range(self.param_dim):
+                    param_i = x[:, i:i+1]            # (B, 1)
+                    token_i = self.projection(param_i)  # (B, embed_dim)
+                    tokens.append(token_i.unsqueeze(1)) # (B, 1, embed_dim)
+                out = torch.cat(tokens, dim=1)       # (B, param_dim, embed_dim)'''
+            if method in {"MLP", "Linear"}:
+                tokens = []
+                for i in range(self.param_dim):
+                    param_i = x[:, i:i+1]                     # (B, 1)
+                    token_i = self.projections[i](param_i)    # (B, embed_dim)
+                    tokens.append(token_i.unsqueeze(1))       # (B, 1, embed_dim)
+                out = torch.cat(tokens, dim=1)                # (B, param_dim, embed_dim)
+            elif method == "MLP_ext" or method == "Linear_ext":
+                out = self.projection(x)           # (B, embed_dim * param_dim)
+                out = out.view(B, self.param_dim, self.embed_dim)
             return out
 
         elif mode == "embed_concat":
