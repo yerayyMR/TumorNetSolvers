@@ -1,4 +1,8 @@
 
+# TO BE REWRITTEN, PLEASE DO NOT FOLLOW STRICTLY YET
+If it is intended to be used in the meantime, please do make sure to copy this repository instead of Zeineb's (requirements should be enough for everything but 'post_analysis.py'.
+
+
 # TumorNetSolvers: A Deep Learning Framework for Personalized PDE-Based Tumor Growth Modeling
 
 
