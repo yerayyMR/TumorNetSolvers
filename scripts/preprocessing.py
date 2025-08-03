@@ -1,4 +1,31 @@
-import os
+
+
+
+
+
+
+
+###########################################################################################################################
+#
+#
+# !!!!!!!!!!!!!!!    Please use 'preprocessing2.py' for preparing the data for analysis.     !!!!!!!!!!!!!!!!!
+# 
+# This file is under revision and will eventually be deleted.
+#
+#
+###########################################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+'''import os
 from TumorNetSolvers.preprocessing.data_preprocessor import preparingDataset, create_json_file
 # =============================================
 # Overview:
@@ -107,4 +134,4 @@ print(f"Preprocessing dataset {dataset_name}...")
 # Preprocessing (use preprocess_dataset2 for generating masks too (only for comparing to baseline), else use preprocess_dataset )
 preprocess_dataset2(dataset_id, num_processes=(8, 4, 8))
 
-print("Preprocessing complete.")
+print("Preprocessing complete.")'''
