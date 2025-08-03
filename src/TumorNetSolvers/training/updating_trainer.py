@@ -1,5 +1,5 @@
 # Copyright 2019 Division of Medical Image Computing, German Cancer Research Center (DKFZ), Heidelberg, Germany
-# Major modifications by Zeineb Haouari
+# Major modifications by Yeray Martin-Ruisanchez & Zeineb Haouari
 import inspect
 import os
 import sys
@@ -9,6 +9,7 @@ from datetime import datetime
 from time import time, sleep
 from typing import Tuple, Union, List, Literal
 import random
+import re
 
 import wandb
 import numpy as np
@@ -60,8 +61,8 @@ from batchgeneratorsv2.helpers.scalar_type import RandomScalar
 from TumorNetSolvers.utils.paths import set_environment_variables
 set_environment_variables()
 nnUNet_preprocessed = os.environ.get('nnUNet_preprocessed')
-#nnUNet_results = os.environ.get('nnUNet_results')
-nnUNet_results = os.path.join('/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/', "results")#os.environ.get('nnUNet_results')
+nnUNet_results = os.environ.get('nnUNet_results')
+#nnUNet_results = os.path.join('/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/', "results")#os.environ.get('nnUNet_results')
 
 # If they are not set, raise an error or handle the missing paths
 if not nnUNet_preprocessed or not nnUNet_results:
@@ -77,7 +78,8 @@ def init_weights(layer):
 
 class Trainer(object):
     def __init__(self, plans: dict, configuration: str, dataset_json: dict, signature:str, fold: Union[Literal['train_val', 'all'], int]= "train_val",  unpack_dataset: bool = True, loss_func: Literal['mse', 'mae']= 'mse', model: Literal['nnUnet', 'ViT', 'TumorSurrogate']= "ViT",
-                 device: torch.device = torch.device(f'cuda:5'), project_name="NN-based-tumor-solvers", experiments = [['c', 'a_bottleneck']], seed = 12345):
+                 device: torch.device = torch.device(f'cuda:5'), project_name="NN-based-tumor-solvers", experiment = [['c', 'a_bottleneck']], seed = 12345, num_epochs: int = 1000, batch_custom: Union[int, None] = None, ending: Union[str, None] = None,
+                 max_train = 72, load_path: Union[str, None] = None, every_hours = None, patience: Union[int, None] = None, counter_epoch_save: Union[int, None] = None, counter_epoch_ema: Union[int, None] = None):
         self.signature=signature #Must Be Defined!!
         self.enable_deep_supervision = False
         self.model= model
@@ -89,9 +91,16 @@ class Trainer(object):
         self.mask= nn.ReLU()
         self.seed = seed
         self.set_all_seeds(self.seed)
+        self.extra = ending
+        self.max_train = max_train
+        self.load_path = load_path
+        self.every_hours = every_hours
+        self.patience = patience
+        self.counter_epoch_save = counter_epoch_save
+        self.counter_epoch_ema = counter_epoch_ema
 
-        # Experiments
-        self.experiments = experiments
+        # experiment
+        self.experiment = experiment
 
         # print what device we are using
         if self.is_ddp:  # implicitly it's clear that we use cuda in this case
@@ -122,20 +131,18 @@ class Trainer(object):
         self.fold = fold
         self.unpack_dataset = unpack_dataset
         self.global_step = 0
-        ### Setting all the folder names. We need to make sure things don't crash in case we are just running
-        # inference and some of the folders may not be defined!
+        ### Setting all the folder names.
         self.preprocessed_dataset_folder_base = join(nnUNet_preprocessed, self.plans_manager.dataset_name) \
             if nnUNet_preprocessed is not None else None
         self.output_folder_base = join(nnUNet_results, self.plans_manager.dataset_name,
                                        self.__class__.__name__ + '__' + self.plans_manager.plans_name + "__" + configuration) \
             if nnUNet_results is not None else None
         if self.model == "ViT":
-            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'MODE_{self.experiments[1]}_METHOD_{self.experiments[0]}_check')
+            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'MODE_{self.experiment[1]}_METHOD_{self.experiment[0]}' + (f'_{self.extra}' if self.extra is not None else ''))
         elif self.model == "TumorSurrogate":
-            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', 'correctResNet', f'LOC_{self.experiments[1]}_MODE_{self.experiments[0]}_check') #_og
+            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'LOC_{self.experiment[1]}_MODE_{self.experiment[0]}' + (f'_{self.extra}' if self.extra is not None else ''))
         else:
-            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'LOC_{self.experiments[1]}_MODE_{self.experiments[0]}_check')
-        #self.output_folder_models = join(self.output_folder, 'models_extra')
+            self.output_folder = join(self.output_folder_base, f'fold_{fold}',  f'_{self.signature}_{self.model}', f'LOC_{self.experiment[1]}_MODE_{self.experiment[0]}' + (f'_{self.extra}' if self.extra is not None else ''))
 
         self.preprocessed_dataset_folder = join(self.preprocessed_dataset_folder_base,
                                                 self.configuration_manager.data_identifier)
@@ -145,29 +152,20 @@ class Trainer(object):
         ### Some hyperparameters for you to fiddle with
         self.initial_lr = 1e-2
         self.weight_decay = 3e-5
-        self.num_epochs = 1000#00
+        self.num_epochs = num_epochs
         self.current_epoch = 0
         self.num_input_channels = None  # -> self.initialize()
         
-        '''if self.model=="ViT":
-            #####TODO: max_volume_size should be extracted automatically (dataset_fingerprint.json file)
-            self.network = CombinedVisionTransformer3D(max_volume_size=self.configuration_manager.patch_size[0], patch_size=16, in_chans=1, num_classes=1000, embed_dim=384, depth=12,
-                    num_heads=6, mlp_ratio=4., qkv_bias=True, representation_size=None, distilled=False,
-                    drop_rate=0., attn_drop_rate=0., drop_path_rate=0., embed_layer=PatchEmbed3D, norm_layer=None,
-                    act_layer=None, weight_init='', global_pool=False, param_dim=5).to(self.device)
-        
-        elif self.model=="TumorSurrogate":
-            self.network = TumorSurrogate(widths=[128, 128, 128, 128], n_cells=[5, 5, 5, 4], strides=[2, 2, 2, 1], experiment=self.experiments, inputs_shape=self.shape_data, param_dim).to(self.device)
-            self.network.apply(init_weights)'''
         if self.model=="nnUnet":
-             self.enable_deep_supervision = True
+            self.enable_deep_supervision = True
 
 
         self.optimizer = self.lr_scheduler = None  # -> self.initialize
         self.grad_scaler = GradScaler() if self.device.type == 'cuda' else None
         self.loss = None  # -> self.initialize
-        self.stop_training = False # Boolean to stop training if convergence or overfitting is detected
-        self.early_stop_patience = 10
+        if self.patience != None:
+            self.stop_training = False # Boolean to stop training if convergence or overfitting is detected
+            self.early_stop_patience = self.patience
 
         # logging
         timestamp = datetime.now()
@@ -198,8 +196,8 @@ class Trainer(object):
         self.inference_allowed_mirroring_axes = None  # ->self.configure_rotation_dummyDA_mirroring_and_inital_patch_size  (will be saved in checkpoints)
 
         ### checkpoint saving 
-        self.save_every = 60
-        self.save_every_ema = 30
+        self.save_every = self.counter_epoch_save
+        self.save_every_ema = self.counter_epoch_ema
         self.previous_epoch_saved = 0
         self.previous_epoch_saved_counter = 0
         self.previous_epoch_saved_best = 0
@@ -208,18 +206,22 @@ class Trainer(object):
 
         ## DDP batch size and oversampling can differ between workers and needs adaptation
         # we need to change the batch size in DDP because we don't use any of those distributed samplers
-        self._set_batch_size()
-        #self.batch_size = 36
-        self.project_name=project_name #"NN-based-tumor-solvers"
+
+        if batch_custom != None:
+            self.batch_size = batch_custom
+        else:
+            self._set_batch_size()
+        
+        self.project_name=project_name
 
         tr_dataset, val_dataset = self.get_tr_and_val_datasets()
-        self.num_iterations_per_epoch =  int(len(tr_dataset)//self.batch_size) #ideally dataset_sz//batch_sz
+        self.num_iterations_per_epoch =  int(len(tr_dataset)//self.batch_size)
         self.num_val_iterations_per_epoch = int(len(val_dataset)//(self.batch_size))
 
         if self.model == "ViT":
-            wandb.init(project=self.project_name, name=f"[{self.model} - Check] Mode: {self.experiments[1]}, Method: {self.experiments[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
+            wandb.init(project=self.project_name, name=f"[{self.model}" + (f'- {self.extra}' if self.extra is not None else '') + "] Mode: {self.experiment[1]}, Method: {self.experiment[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
         else:
-            wandb.init(project=self.project_name, name=f"[{self.model} - ResNet 7] Loc: {self.experiments[1]}, Mode: {self.experiments[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
+            wandb.init(project=self.project_name, name=f"[{self.model}" + (f'- {self.extra}' if self.extra is not None else '') + "] Loc: {self.experiment[1]}, Mode: {self.experiment[0]}" ,settings=wandb.Settings(_disable_stats=True), reinit=True)
         
         self.was_initialized = False
         
@@ -269,10 +271,11 @@ class Trainer(object):
                 self.network = CombinedVisionTransformer3D(max_volume_size=self.configuration_manager.patch_size[0], patch_size=16, in_chans=1, num_classes=1000, embed_dim=384, depth=12,
                         num_heads=6, mlp_ratio=4., qkv_bias=True, representation_size=None, distilled=False,
                         drop_rate=0., attn_drop_rate=0., drop_path_rate=0., embed_layer=PatchEmbed3D, norm_layer=None,
-                        act_layer=None, weight_init='', global_pool=False, param_dim=5, experiment=self.experiments).to(self.device)
+                        act_layer=None, weight_init='', global_pool=False, param_dim=5, experiment=self.experiment).to(self.device)
             
             elif self.model=="TumorSurrogate":
-                self.network = TumorSurrogate(widths=[64, 64, 64, 64], n_cells=[3, 3, 3, 2], strides=[2, 2, 2, 1], experiment=self.experiments, inputs_shape=self.shape_data, param_dim=5).to(self.device)
+                # Modified version from original (widths=[128, 128, 128, 128], n_cells=[5, 5, 5, 4])
+                self.network = TumorSurrogate(widths=[64, 64, 64, 64], n_cells=[3, 3, 3, 2], strides=[2, 2, 2, 1], experiment=self.experiment, inputs_shape=self.shape_data, param_dim=5).to(self.device)
                 self.network.apply(init_weights)
 
             # compile network for free speedup
@@ -369,7 +372,7 @@ class Trainer(object):
             input_channels=num_input_channels,
             output_channels=num_output_channels,
             inputs_shape=self.shape_data,
-            experiments=self.experiments,
+            experiments=self.experiment,
             allow_init=True,
             deep_supervision=enable_deep_supervision
         )
@@ -1113,38 +1116,41 @@ class Trainer(object):
         current_epoch = self.current_epoch
 
         elapsed_time = time() - self.start_time
-        self.save_every_hours = 3 * 3600
-        if elapsed_time > self.save_every_hours:
-            self.save_checkpoint(join(self.output_folder, f'checkpoint_epoch_{current_epoch}_6h.pth'))
-            #os.remove(join(self.output_folder, f'checkpoint_epoch_{self.previous_epoch_saved}.pth'))
-            self.start_time = time()
+        if self.every_hours != None:
+            self.save_every_hours = self.every_hours * 3600
+            if elapsed_time > self.save_every_hours:
+                self.save_checkpoint(join(self.output_folder, f'checkpoint_epoch_{current_epoch}_{self.every_hours}h.pth'))
+                self.start_time = time()
         
-        if (current_epoch + 1) % self.save_every == 0 and current_epoch != (self.num_epochs - 1):
-            self.save_checkpoint(join(self.output_folder, f'checkpoint_epoch_{current_epoch}_counter.pth'))
+        if self.save_every != None:
+            if (current_epoch + 1) % self.save_every == 0 and current_epoch != (self.num_epochs - 1):
+                self.save_checkpoint(join(self.output_folder, f'checkpoint_epoch_{current_epoch}_counter.pth'))
 
-            if os.path.exists(os.path.join(self.output_folder, f'checkpoint_epoch_{self.model}_{current_epoch}_counter.pth')):
-                if os.path.exists(os.path.join(self.output_folder, f'checkpoint_epoch_{self.model}_{self.previous_epoch_saved_counter}_counter.pth')) and current_epoch != self.previous_epoch_saved_counter:
-                    os.remove(join(self.output_folder, f'checkpoint_epoch_{self.model}_{self.previous_epoch_saved_counter}_counter.pth'))
-                    self.previous_epoch_saved_counter = current_epoch
-                if self.previous_epoch_saved_counter == 0:
-                    self.previous_epoch_saved_counter = current_epoch
+                # In case the training crashes we secure that always one saved parameter file is not corrupted
+                if os.path.exists(os.path.join(self.output_folder, f'checkpoint_epoch_{self.model}_{current_epoch}_counter.pth')):
+                    if os.path.exists(os.path.join(self.output_folder, f'checkpoint_epoch_{self.model}_{self.previous_epoch_saved_counter}_counter.pth')) and current_epoch != self.previous_epoch_saved_counter:
+                        os.remove(join(self.output_folder, f'checkpoint_epoch_{self.model}_{self.previous_epoch_saved_counter}_counter.pth'))
+                        self.previous_epoch_saved_counter = current_epoch
+                    if self.previous_epoch_saved_counter == 0:
+                        self.previous_epoch_saved_counter = current_epoch
 
-        # handle 'best' checkpointing using EMA dice
+        # update 'best' ema dice in logger - If of interest, uncomment lines to save the corresponding best epoch
         if self._best_ema_dice is None or self.logger.my_fantastic_logging['ema_dice'][-1] > self._best_ema_dice:
             self._best_ema_dice = self.logger.my_fantastic_logging['ema_dice'][-1]
-            #self.print_to_log_file(f"New best EMA Dice: {np.round(self._best_ema_dice.cpu(), decimals=4)}")
             #self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_best_ema_dice.pth'))
 
-        # handle 'best' checkpointing using val dice
+        # update 'best' val dice in logger - If of interest, uncomment lines to save the corresponding best epoch
         if self._best_val_dice is None or self.logger.my_fantastic_logging['val_dice'][-1] > self._best_val_dice:
             self._best_val_dice = self.logger.my_fantastic_logging['val_dice'][-1]
             #self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_best_val_dice.pth'))
         
+        # update 'best' ema loss in logger and save checkpoint (since MSE loss used, MSE is used to assess best performing model)
         if self._best_ema_loss is None or self.logger.my_fantastic_logging['ema_loss'][-1] < self._best_ema_loss:
             self._best_ema_loss = self.logger.my_fantastic_logging['ema_loss'][-1]
             self.print_to_log_file(f"New best EMA loss: {np.round(self._best_ema_loss, decimals=4)}")
             self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_{current_epoch}_best_ema_loss.pth'))
 
+            # In case the training crashes we secure that always one saved parameter file is not corrupted
             if os.path.exists(os.path.join(self.output_folder, f'checkpoint_{self.model}_{current_epoch}_best_ema_loss.pth')):
                 if os.path.exists(os.path.join(self.output_folder, f'checkpoint_{self.model}_{self.previous_epoch_saved_best}_best_ema_loss.pth')) and current_epoch != self.previous_epoch_saved:
                     os.remove(join(self.output_folder, f'checkpoint_{self.model}_{self.previous_epoch_saved_best}_best_ema_loss.pth'))
@@ -1152,22 +1158,27 @@ class Trainer(object):
                 if self.previous_epoch_saved_best == 0:
                     self.previous_epoch_saved_best = current_epoch
 
-            if os.path.exists(os.path.join(self.output_folder, f'checkpoint_{self.model}_{current_epoch}_best_ema_loss.pth')) and (current_epoch + 1) % self.save_every_ema == 0:
-                self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_{current_epoch}_best_ema_loss_counter.pth'))
-                if os.path.exists(os.path.join(self.output_folder, f'checkpoint_{self.model}_{self.previous_epoch_saved_ema_count}_best_ema_loss_counter.pth')) and current_epoch != self.previous_epoch_saved_ema_count:
-                    os.remove(join(self.output_folder, f'checkpoint_{self.model}_{self.previous_epoch_saved_ema_count}_best_ema_loss_counter.pth'))
-                    self.previous_epoch_saved_ema_count = current_epoch
-                if self.previous_epoch_saved_ema_count == 0:
-                    self.previous_epoch_saved_ema_count = current_epoch
+
+            if self.save_every_ema != None:
+                # We add a counter to save weights every certain amount of times that the loss has improved for comparison
+                # In case the training crashes we secure that always one saved parameter file is not corrupted
+                if os.path.exists(os.path.join(self.output_folder, f'checkpoint_{self.model}_{current_epoch}_best_ema_loss.pth')) and (current_epoch + 1) % self.save_every_ema == 0:
+                    self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_{current_epoch}_best_ema_loss_counter.pth'))
+                    if os.path.exists(os.path.join(self.output_folder, f'checkpoint_{self.model}_{self.previous_epoch_saved_ema_count}_best_ema_loss_counter.pth')) and current_epoch != self.previous_epoch_saved_ema_count:
+                        os.remove(join(self.output_folder, f'checkpoint_{self.model}_{self.previous_epoch_saved_ema_count}_best_ema_loss_counter.pth'))
+                        self.previous_epoch_saved_ema_count = current_epoch
+                    if self.previous_epoch_saved_ema_count == 0:
+                        self.previous_epoch_saved_ema_count = current_epoch
             
-        # handle 'best' checkpointing using val loss
+        # update 'best' val losses in logger - If of interest, uncomment lines to save the corresponding best epoch
         if self._best_val_loss is None or self.logger.my_fantastic_logging['val_losses'][-1] < self._best_val_loss:
             self._best_val_loss = self.logger.my_fantastic_logging['val_losses'][-1]
             #self.save_checkpoint(join(self.output_folder, f'checkpoint_{self.model}_best_val_loss.pth'))
         
-
+        # Furthermore the current epoch is always checked in case there has been no improvement in metrics or training crashes between the other counters
         self.save_checkpoint(join(self.output_folder, f'checkpoint_epoch_{current_epoch}.pth'))
 
+        # In case the training crashes we secure that always one saved parameter file is not corrupted
         if os.path.exists(os.path.join(self.output_folder, f'checkpoint_epoch_{current_epoch}.pth')):
             if os.path.exists(os.path.join(self.output_folder, f'checkpoint_epoch_{self.previous_epoch_saved}.pth')) and current_epoch != self.previous_epoch_saved:
                 os.remove(join(self.output_folder, f'checkpoint_epoch_{self.previous_epoch_saved}.pth'))
@@ -1179,7 +1190,8 @@ class Trainer(object):
             self.logger.plot_progress_png(self.output_folder)
 
         # Check if convergence or overfitting occurs
-        self.check_early_stopping()
+        if self.patience != None:
+            self.check_early_stopping()
 
         self.current_epoch += 1
 
@@ -1192,7 +1204,7 @@ class Trainer(object):
 
         metrics_improved = False
 
-        # Check for improvement on all tracked metrics
+        # Check for improvement on all tracked metrics (but SSIM)
         if self._best_es_val_loss is None or val_loss < self._best_es_val_loss:
             self._best_es_val_loss = val_loss
             metrics_improved = True
@@ -1303,16 +1315,6 @@ class Trainer(object):
             if checkpoint['grad_scaler_state'] is not None:
                 self.grad_scaler.load_state_dict(checkpoint['grad_scaler_state'])
     
-    '''def register_hooks(self):
-        """Register hooks to capture gradients."""
-        for name, layer in self.network.named_children(): #named_children()
-            layer.register_backward_hook(self.save_gradient(name))
-
-    def save_gradient(self, name):
-        """Hook function to save gradients."""
-        def hook(module, grad_input, grad_output):
-            self.gradients[name] = grad_output[0]  # Store the gradient output
-        return hook'''
     def register_param_hooks(self):
         for name, param in self.network.named_parameters():
             if not param.requires_grad:
@@ -1327,7 +1329,8 @@ class Trainer(object):
         
         # Start time
         self.start_time = time()
-        time_limit_seconds = 72 * 3600  # 72 hours in seconds
+        if self.max_train != None:
+            time_limit_seconds = self.max_train * 3600  # hours in seconds
 
         # log important settings
         wandb.config.update({
@@ -1345,8 +1348,15 @@ class Trainer(object):
         
         save_frequency = 1
 
-        #self.load_checkpoint('/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/Dataset900_Brain/Trainer__nnUNetPlans__3d_fullres/fold_train_val_test/_10k_TumorSurrogate/correctResNet/LOC_a_upsampling_after_MODE_a_new7/checkpoint_epoch_200.pth') # 
-        #self.current_epoch = 201
+        if self.load_path != None
+            self.load_checkpoint(self.load_path)
+            filename = os.path.basename(self.load_path)
+            match = re.search(r'\d+', filename)
+            if match:
+                number = int(match.group())
+                self.current_epoch = number + 1 # Starts on the next epoch
+            else:
+                raise ValueError(f"No number found in filename: {filename}. Please check a number exists and if not manually insert the epoch where it stopped at.")
         self.name = wandb.run.name
         for epoch in range(self.current_epoch, self.num_epochs):
             print(f"Epoch {epoch}: ")
@@ -1380,13 +1390,14 @@ class Trainer(object):
             self.on_epoch_end()
 
             # Check time after both training and validation are complete
-            elapsed_time = time() - self.start_time
-            if elapsed_time > time_limit_seconds:
-                print(f"Stopping training after epoch {epoch}: 72-hour time limit exceeded.")
-                break
-
-            if self.stop_training:
-                break
+            if self.max_train != None:
+                elapsed_time = time() - self.start_time
+                if elapsed_time > time_limit_seconds:
+                    print(f"Stopping training after epoch {epoch}: 72-hour time limit exceeded.")
+                    break
+            if self.patience != None:
+                if self.stop_training:
+                    break
         
         print('next epoch!')
         self.on_train_end()
