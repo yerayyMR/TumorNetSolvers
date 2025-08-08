@@ -1348,7 +1348,7 @@ class Trainer(object):
         
         save_frequency = 1
 
-        if self.load_path != None
+        if self.load_path != None:
             self.load_checkpoint(self.load_path)
             filename = os.path.basename(self.load_path)
             match = re.search(r'\d+', filename)
