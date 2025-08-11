@@ -1,11 +1,20 @@
 
 import os
+import sys
+# For different experiments
+current_dir = os.path.dirname(os.path.abspath(__file__))  # scripts directory
+src_path = os.path.abspath(os.path.join(current_dir, '..', 'src'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 import re
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 from batchgenerators.utilities.file_and_folder_operations import load_json
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+from scripts.set_env import set_environment_variables
+set_environment_variables()
 # Access the environment variable for nnUNet_preprocessed
 nnUNet_preprocessed = os.environ.get('nnUNet_preprocessed')
 if nnUNet_preprocessed is None:
