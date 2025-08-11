@@ -25,7 +25,7 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 import torch
-from TumorNetSolvers.inference.inference_utils import get_settings_and_file_paths
+#from TumorNetSolvers.inference.inference_utils import get_settings_and_file_paths
 from TumorNetSolvers.inference.run_inference_NEWEST import run_inference
 
 
@@ -33,12 +33,11 @@ def main():
     nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
     # ============ Configuration ============
     DATASET_NAME = 'Dataset900_Brain'       # Specify the dataset name
-    MODEL = 'nnUnet'                        # Models to use for inference: 'ViT', 'nnUnet', 'TumorSurrogate'
+    MODEL = 'ViT'                        # Models to use for inference: 'ViT', 'nnUnet', 'TumorSurrogate'
     DEVICE = torch.device('cuda:0')  
 
-    ENDING = None                           # Specific ending to the naming of the folder where weights and logs will be saved (str or None) -- If None default naming based one experiment will be used
+    ENDING = "best_FK_50_3"                           # Specific ending to the naming of the folder where weights and logs will be saved (str or None) -- If None default naming based one experiment will be used
     CHECKPOINT = None                       # Directory to file containing the weights of the model to be used for inference (str or None) -- If None it will use the last epoch of the best_ema_loss in the corresponding default directory
-    
     OUTPUT_BASE = None                      # Directory or list of directories to where the inference values are saved (str or list(str) or None) -- If None it will be set to default, check: src/TumorNetSolvers/inference/inference_utils.py
 
     DATA_FOLDER = os.path.join(nnUNet_preprocessed, DATASET_NAME,"nnUNetPlans_3d_fullres")
@@ -81,7 +80,7 @@ def main():
     }'''
 
 
-    EXPERIMENTS = [['MLP', 'mul_token']]
+    EXPERIMENTS = [['Linear', 'embed_concat']]
 
     # Define coefficients -- Same format as EXPERIMENTS:
     # - If two values in inner list, they correspond uniquely to rho and D correspondingly [[rho, D]]
@@ -124,7 +123,7 @@ def main():
                 print("Running inference...")
                 run_inference(
                     dataset_name=DATASET_NAME,
-                    models=MODEL,
+                    model=MODEL,
                     data_folder=DATA_FOLDER,
                     output_base = OUTPUT_BASE[idx] if isinstance(OUTPUT_BASE, list) else OUTPUT_BASE,
                     device=DEVICE,
@@ -142,7 +141,7 @@ def main():
             print("Running inference...")
             run_inference(
                     dataset_name=DATASET_NAME,
-                    models=MODEL,
+                    model=MODEL,
                     data_folder=DATA_FOLDER,
                     output_base=OUTPUT_BASE,
                     device=DEVICE,
@@ -150,7 +149,7 @@ def main():
                     ending=ENDING,
                     experiment = experiment,
                     chkpt=CHECKPOINT,
-                    coefficients=coefficient,
+                    coefficients=COEFFICIENTS,
                     batch_size=BATCH_SIZE
                 )
             print("Inference complete. Results saved to output directory.")

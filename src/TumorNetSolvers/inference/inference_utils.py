@@ -99,12 +99,12 @@ def get_settings_and_file_paths(dataset_name: str):
 
     return plan, dataset_json, test_keys, parameters
 
-def construct_chkpt(model, dataset_name, experiment, ending):
+def construct_chkpt(nnUnet_results, model, dataset_name, experiment, ending):
 
     if model == "ViT":
-        chkpt=f"/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/{dataset_name}/Trainer__nnUNetPlans__3d_fullres/fold_train_val_test/_10k_{model}/MODE_{experiment[1]}_METHOD_{experiment[0]}{ending if ending is not None else ''}"
+        chkpt= os.path.join(nnUnet_results, f"{dataset_name}/Trainer__nnUNetPlans__3d_fullres/fold_train_val_test/_10k_{model}/MODE_{experiment[1]}_METHOD_{experiment[0]}{'_'+ending if ending is not None else ''}")
     else:
-        chkpt=f"/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/{dataset_name}/Trainer__nnUNetPlans__3d_fullres/fold_train_val_test/_10k_{model}/LOC_{experiment[1]}_MODE_{experiment[0]}{ending if ending is not None else ''}"
+        chkpt=os.path.join(nnUnet_results, f"{dataset_name}/Trainer__nnUNetPlans__3d_fullres/fold_train_val_test/_10k_{model}/LOC_{experiment[1]}_MODE_{experiment[0]}{'_'+ending if ending is not None else ''}")
 
     # Pattern to match checkpoint files like: checkpoint_MODEL_<number>_best_ema_loss.pth
     pattern = re.compile(rf"^checkpoint_{model}_(\d+)_best_ema_loss\.pth$")
@@ -132,18 +132,18 @@ def construct_output_base(nnUNet_results, model, dataset_name, coefficients, exp
     if coefficients != None:
         if model == "ViT":
             if all(isinstance(item, list) and len(item) == 2 for item in coefficients): # Only rho and D
-                output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f'MODE_{experiment[1]}_METHOD_{experiment[0]}{"_"+ending if ending is not None else ''}_rho_{coefficients[0]}_D_{coefficients[1]}', 'preds')
+                output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"MODE_{experiment[1]}_METHOD_{experiment[0]}{'_' + ending if ending is not None else ''}_rho_{coefficients[0]}_D_{coefficients[1]}", 'preds')
             else:
-                output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f'MODE_{experiment[1]}_METHOD_{experiment[0]}{"_"+ending if ending is not None else ''}_coeffs_{coefficients[0]}', 'preds')
+                output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"MODE_{experiment[1]}_METHOD_{experiment[0]}{'_'+ending if ending is not None else ''}_coeffs_{coefficients[0]}", 'preds')
         else:
             if all(isinstance(item, list) and len(item) == 2 for item in coefficients): # Only rho and D
-                output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f'LOC_{experiment[1]}_MODE_{experiment[0]}{"_"+ending if ending is not None else ''}_rho_{coefficients[0]}_D_{coefficients[1]}', 'preds')
+                output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"LOC_{experiment[1]}_MODE_{experiment[0]}{'_'+ending if ending is not None else ''}_rho_{coefficients[0]}_D_{coefficients[1]}", 'preds')
             else:
-                output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f'LOC_{experiment[1]}_MODE_{experiment[0]}{"_"+ending if ending is not None else ''}_coeffs_{coefficients[0]}', 'preds')
+                output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"LOC_{experiment[1]}_MODE_{experiment[0]}{'_'+ending if ending is not None else ''}_coeffs_{coefficients[0]}", 'preds')
     else:
         if model == "ViT":
-            output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f'MODE_{experiment[1]}_METHOD_{experiment[0]}{"_"+ending if ending is not None else ''}', 'preds')
+            output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"MODE_{experiment[1]}_METHOD_{experiment[0]}{'_'+ending if ending is not None else ''}", 'preds')
         else:
-            output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f'LOC_{experiment[1]}_MODE_{experiment[0]}{"_"+ending if ending is not None else ''}', 'preds')
+            output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"LOC_{experiment[1]}_MODE_{experiment[0]}{'_'+ending if ending is not None else ''}", 'preds')
 
     return output_base

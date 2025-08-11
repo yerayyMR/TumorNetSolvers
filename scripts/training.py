@@ -39,7 +39,7 @@ TRAINING_CONFIGURATION = '3d_fullres'   # '2d', '3d_lowres', '3d_fullres', etc.
 DEVICE = torch.device('cuda:0')
 NUM_EPOCHS = 1000                       # max. number of epochs (int)
 BATCH_CUSTOM = None                     # custom batch size for experiments (int or None) -- If None, default used according to GPU
-ENDING = None                           # Specific ending to the naming of the folder where weights and logs will be saved (str or None) -- If None default naming based one experiment will be used
+ENDING = 'trial'                           # Specific ending to the naming of the folder where weights and logs will be saved (str or None) -- If None default naming based one experiment will be used
 MAX_TRAIN = 72                          # Hours that the training is allowed to run for (int / float or None) -- If None time from wall clock will not enforce it to stop
 LOAD_PATH = None                        # Path to load previous training if needed (str or None) -- If None not imported -- Filename MUST contain the epoch number that it was saved on
 EVERY_HOURS = 6                         # Every how many hours an epoch shall be saved for comparison (int / float or None)
@@ -116,7 +116,7 @@ for experiment in EXPERIMENTS:
         model=MODEL_NAME,
         dataset_json=dataset_json,
         project_name=PROJECT_NAME,
-        experiments = experiment,
+        experiment = experiment,
         seed=12345,
         num_epochs=NUM_EPOCHS,
         batch_custom=BATCH_CUSTOM,

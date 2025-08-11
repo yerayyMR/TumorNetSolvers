@@ -68,7 +68,7 @@ def run_inference(dataset_name: str, model: str, data_folder: str, output_base: 
     # Construct the checkpoint path
 
     if chkpt == None:
-        chkpt = construct_chkpt(model, dataset_name, experiment, ending)
+        chkpt = construct_chkpt(nnUNet_results, model, dataset_name, experiment, ending)
     
 
     if chkpt and os.path.exists(chkpt):
