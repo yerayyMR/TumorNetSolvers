@@ -1,8 +1,0 @@
-{
-    "channel_names": {
-        "0": "MRI"
-    },
-    "numTraining": 1000,
-    "file_ending": ".nii.gz",
-    "_comment": "Dataset for tumor growth simulation"
-}
