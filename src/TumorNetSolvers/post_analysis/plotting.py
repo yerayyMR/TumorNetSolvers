@@ -20,7 +20,9 @@ import torch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 from scripts.set_env import set_environment_variables
 
-def plt_coeffs(nnUNet_results, patient_ids, plane_per_patient, model_experiments, dataset, signature, coefficients, ending):
+from utils import save_full_ground_truths
+
+def plt_coeffs(nnUNet_results, patient_ids, plane_per_patient, model_experiments, dataset, signature, coefficients, ending, gt_base_path):
 
     '''# Configuration
 MODEL = "nnUnet"
@@ -86,7 +88,13 @@ PLANE_PER_PATIENT = {
                         else:
                             paths_list.append((f'{coefficient[0]}_coeff', os.path.join(nnUNet_results, dataset, f"{model}_{signature}", f"MODE_{experiment[1]}_METHOD_{experiment[0]}{'_'+ending if ending is not None else ''}_coeffs_{coefficient[0]}", 'preds', 'masked', f'{patient_id}.npy')))
 
-                paths_list.append(('ground_truth_image', f'/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt/{patient_id}/ground_truth_full.nii.gz'))
+                gt_path = f'/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt/{patient_id}/ground_truth_full.nii.gz'
+                if not os.path.exists(gt_path):
+                    save_full_ground_truths(gt_base_path, dataset)
+                if not os.path.exists(gt_path):
+                    raise FileNotFoundError(f"Path does not exist: {gt_path}")
+                
+                paths_list.append(('ground_truth_image', gt_path))
                 paths = {'p': paths_list}
                     
                 patient_paths = dict(paths['p'])
@@ -117,7 +125,7 @@ PLANE_PER_PATIENT = {
     plt.subplots_adjust(wspace=0.05, hspace=0.00000001, left=0.02, right=0.98, top=0.95, bottom=0.05)
     plt.show()
 
-def plt_diff(nnUNet_results, models, experiments, patient_id, arch_labels, dataset, signature, ending):
+def plt_diff(nnUNet_results, models, experiments, patient_id, arch_labels, dataset, signature, ending, gt_base_path):
 
     '''
     MODELS = ["nnUnet", "TumorSurrogate", "ViT"]
@@ -139,9 +147,13 @@ PATIENT_ID = "BRAIN_p875" #1973#1911#12726'''
         else:
             path = os.path.join(nnUNet_results, dataset, f"{model}_{signature}", f"MODE_{experiment[1]}_METHOD_{experiment[0]}{'_'+ending if ending is not None else ''}", 'preds', 'masked', f'{patient_id}.npy')
 
-        gt_true = nib.load(
-            f'/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt/{patient_id}/ground_truth_full.nii.gz'
-        ).get_fdata()
+        gt_true_path = f'/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt/{patient_id}/ground_truth_full.nii.gz'
+        if not os.path.exists(gt_true_path):
+            save_full_ground_truths(gt_base_path, dataset)
+        if not os.path.exists(gt_true_path):
+            raise FileNotFoundError(f"Path does not exist: {gt_true_path}")
+
+        gt_true = nib.load(gt_true_path).get_fdata()
         gt_pred = np.load(path)[0]
         z, _, _ = map(int, np.round(center_of_mass(gt_true)))
         diff = gt_pred - gt_true
@@ -165,9 +177,14 @@ PATIENT_ID = "BRAIN_p875" #1973#1911#12726'''
             path = os.path.join(nnUNet_results, dataset, f"{model}_{signature}", f"MODE_{experiment[1]}_METHOD_{experiment[0]}{'_'+ending if ending is not None else ''}", 'preds', 'masked', f'{patient_id}.npy')
 
         gt_pred = np.load(path)[0]
-        gt_true = nib.load(
-            f'/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt/{patient_id}/ground_truth_full.nii.gz'
-        ).get_fdata()
+
+        gt_true_path = f'/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt/{patient_id}/ground_truth_full.nii.gz'
+        if not os.path.exists(gt_true_path):
+            save_full_ground_truths(gt_base_path, dataset)
+        if not os.path.exists(gt_true_path):
+            raise FileNotFoundError(f"Path does not exist: {gt_true_path}")
+        
+        gt_true = nib.load(gt_true_path).get_fdata()
         z, _, _ = map(int, np.round(center_of_mass(gt_true)))
         diff = gt_pred - gt_true
         overlays = [gt_pred, gt_true, diff]
@@ -225,7 +242,7 @@ PATIENT_ID = "BRAIN_p875" #1973#1911#12726'''
 
     plt.show()
 
-def plt_diff_individual(nnUNet_results, models, experiments, patient_ids, arch_labels, dataset, signature, ending):
+def plt_diff_individual(nnUNet_results, models, experiments, patient_ids, arch_labels, dataset, signature, ending, gt_base_path):
 
 
     '''# ---------------------
@@ -252,6 +269,10 @@ PATIENT_IDS = {
 
         # Load ground truth
         gt_true_path = f'/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt/{pid}/ground_truth_full.nii.gz'
+        if not os.path.exists(gt_true_path):
+            save_full_ground_truths(gt_base_path, dataset)
+        if not os.path.exists(gt_true_path):
+            raise FileNotFoundError(f"Path does not exist: {gt_true_path}")
         gt_true_all = nib.load(gt_true_path).get_fdata()
 
         # Load prediction
@@ -287,6 +308,10 @@ PATIENT_IDS = {
 
         # Load ground truth
         gt_true_path = f'/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt/{pid}/ground_truth_full.nii.gz'
+        if not os.path.exists(gt_true_path):
+            save_full_ground_truths(gt_base_path, dataset)
+        if not os.path.exists(gt_true_path):
+            raise FileNotFoundError(f"Path does not exist: {gt_true_path}")
         gt_true_all = nib.load(gt_true_path).get_fdata()
 
         # Load prediction
@@ -874,7 +899,7 @@ MODEL_EXPERIMENTS = {
     )
     plot_model_specific(model_volumes, model_mses, D_dict, rho_dict, mse_dict)
 
-def plt_rho_D_comp(nnUNet_results, coefficients, dataset, model_experiments, patient_id, ending, signature):
+def plt_rho_D_comp(nnUNet_results, coefficients, dataset, model_experiments, patient_id, ending, signature, gt_base_path):
 
     '''PATIENT_ID = "p875"  # <<<<<<< Change this value only to switch patient
 MODEL = "nnUnet"
@@ -907,6 +932,10 @@ COEFFICIENTS = [
 
     # Load ground truth and compute center of mass
     gt_path = f"/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt/BRAIN_{patient_id}/ground_truth_full.nii.gz"
+    if not os.path.exists(gt_path):
+        save_full_ground_truths(gt_base_path, dataset)
+    if not os.path.exists(gt_path):
+        raise FileNotFoundError(f"Path does not exist: {gt_path}")
     gt_data = nib.load(gt_path).get_fdata()
     z, y, x = map(int, np.round(center_of_mass(gt_data)))
     # === Utility functions ===

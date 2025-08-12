@@ -11,22 +11,20 @@ from torch.utils.data import DataLoader
 import numpy as np
 import nibabel as nib
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+from scripts.set_env import set_environment_variables
+set_environment_variables()
+nnUNet_preprocessed = os.environ.get('nnUNet_preprocessed')
+
 import torch
 import json
 
-def save_full_ground_truths(dataset_name: str, data_folder: str, output_base: str):
-
-    '''DATASET_NAME = "Dataset900_Brain"
-nnUNet_preprocessed = os.environ.get('nnUNet_preprocessed')
-DATA_FOLDER = os.path.join(nnUNet_preprocessed, DATASET_NAME,"nnUNetPlans_3d_fullres")
-OUTPUT_BASE = '/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt'
-
-save_full_ground_truths(DATASET_NAME, DATA_FOLDER, OUTPUT_BASE)'''
-
+def save_full_ground_truths(dataset_name: str, output_base: str):
 
     """
     Iterate through test set and save full 3D ground truth tumor masks as NIfTI files.
     """
+    data_folder = os.path.join(nnUNet_preprocessed, dataset_name,"nnUNetPlans_3d_fullres")
     plan, dataset_json, test_keys, parameters = get_settings_and_file_paths(dataset_name)
     dataset = CustomDataset(data_folder, test_keys)
     data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
@@ -61,11 +59,6 @@ def num_params(pth_path):
         else:
             return 0  # ignore non-tensor, non-dict entries
 
-    '''    experiment = ['Linear', 'embed_concat']
-    MODELS = ["ViT"]
-    # Path to your checkpoint
-    pth_path = f"/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/results/Dataset300_Brain/Trainer__nnUNetPlans__3d_fullres/fold_train_val_test/_10k_{MODELS[0]}/MODE_{experiment[1]}_METHOD_{experiment[0]}_DTI_50_3/best_cases/checkpoint_{MODELS[0]}_7961_best_ema_loss.pth"
-    '''
     checkpoint = torch.load(pth_path, map_location='cpu')
 
     if 'state_dict' in checkpoint:
@@ -76,37 +69,9 @@ def num_params(pth_path):
     total_params = count_params(state_dict)
     print(f"Total parameters: {total_params}")
 
-def calc_audc(model_experiments, dataset, ending):
+def calc_audc(model_experiments, dataset, ending, signature):
 
-    '''MODEL_EXPERIMENTS = {
-    'nnUnet': [
-        ['c', 'a_downsampling'], ['a', 'a_downsampling'],
-        ['c', 'b_downsampling'], ['a', 'b_downsampling'],
-        ['c', 'inputs'], ['a', 'inputs'],
-        ['c', 'b_bottleneck'], ['a', 'b_bottleneck'],
-        ['c', 'a_bottleneck'], ['a', 'a_bottleneck']
-    ],
-    'TumorSurrogate': [
-        ['c', 'a_downsampling'], ['a', 'a_downsampling'],
-        ['c', 'b_downsampling'], ['a', 'b_downsampling'],
-        ['c', 'inputs'], ['a', 'inputs'],
-        ['c', 'b_bottleneck'], ['a', 'b_bottleneck'],
-        ['c', 'a_bottleneck'], ['a', 'a_bottleneck']
-    ],
-    'ViT': [
-        ['MLP', 'one_token'],
-        ['Linear', 'one_token'],
-        ['MLP', 'mul_token'],
-        ['MLP', 'embed_concat'],
-        ['Linear', 'embed_concat'],
-        ['MLP', 'embed_add'],
-        ['Linear', 'embed_add']
-    ]
-}
-
-DATASET_NAME = "Dataset900_Brain"'''
-
-    base_path = os.path.join(os.path.dirname(__file__), '..', 'performance_summaries')
+    base_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'performance_summaries')
 
     def compute_audc_from_json(json_path):
         """
@@ -178,7 +143,7 @@ DATASET_NAME = "Dataset900_Brain"'''
                 exp_folder = f"LOC_{exp[1]}_MODE_{exp[0]}{'_'+ending if ending is not None else ''}"
 
             # Build path to JSON file
-            json_folder = os.path.join(base_path, dataset, model, exp_folder)
+            json_folder = os.path.join(base_path, dataset, f"{model}_{signature}", exp_folder)
 
             json_file = f"evaluation_results_{model}_10k.json"
             json_path = os.path.join(json_folder, json_file)
@@ -201,8 +166,4 @@ DATASET_NAME = "Dataset900_Brain"'''
                 print(f"[Error] {model}/{exp_folder}: {e}")
 
                 all_audc_results[model] = model_results
-
-    # Optional: save results to a JSON file
-    with open("/home/home/yeray_jonas/tumornetsolvers/performance_summaries/all_audc_results.json", "w") as f:
-        json.dump(all_audc_results, f, indent=4)
 

@@ -14,6 +14,7 @@ if src_path not in sys.path:
 from TumorNetSolvers.post_analysis.plotting import plt_coeffs, plt_dice_scores, plt_diff, plt_diff_individual, plt_rho_D_comp, plt_error_volume_rho_D
 from TumorNetSolvers.post_analysis.additional_plotting import mul_histo_comp, worst_best_error
 from TumorNetSolvers.post_analysis.utils import calc_audc, num_params, save_full_ground_truths
+
 from set_env import set_environment_variables
 set_environment_variables() # Modify path in this function accordingly
 nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
@@ -25,6 +26,7 @@ def main():
     DATASET_NAME = 'Dataset900_Brain'       # Specify the dataset name
     ENDING = 'trial'                           # Specific ending to the naming of the folder where weights and logs will be saved (str or None) -- If None default naming based one experiment will be used
     SIGNATURE='10k'
+    GT_BASE_PATH = '/mnt/Drive4/yeray_jonas/TumorNetSolvers_ext/data_and_outputs/preprocessed_data/gt'  # Path where the ground truths will be created at
 
     # Models and experiments for overall plots. Here the options are presented, each will need to be defined for each plot based on interest.
 
@@ -97,7 +99,7 @@ def main():
 
         COEFFICIENTS = [[0], [0.2], [0.4], [0.6], [0.8], [1]]   # (ONLY on this format) Which percentages shall be considered (refer to "running_infernece.py" for background knowledge)
 
-        plt_coeffs(nnUNet_results, PATIENT_IDS, PLANE_PER_PATIENT, MODEL_EXPERIMENTS, DATASET_NAME, SIGNATURE, COEFFICIENTS, ENDING)
+        plt_coeffs(nnUNet_results, PATIENT_IDS, PLANE_PER_PATIENT, MODEL_EXPERIMENTS, DATASET_NAME, SIGNATURE, COEFFICIENTS, ENDING, GT_BASE_PATH)
 
 
     #########
@@ -116,7 +118,7 @@ def main():
 
             PATIENT_ID = "BRAIN_p875" #1973#1911#12726
 
-            plt_diff(nnUNet_results, MODELS, EXPERIMENTS, PATIENT_ID, ARCH_LABELS, DATASET_NAME, SIGNATURE, ENDING)
+            plt_diff(nnUNet_results, MODELS, EXPERIMENTS, PATIENT_ID, ARCH_LABELS, DATASET_NAME, SIGNATURE, ENDING, GT_BASE_PATH)
         elif DIFF_PLOT_INDIVIDUAL:
 
             PATIENT_IDS = {
@@ -125,7 +127,7 @@ def main():
                 "ViT": "BRAIN_p3650"
             }
 
-            plt_diff_individual(nnUNet_results, MODELS, EXPERIMENTS, PATIENT_IDS, ARCH_LABELS, DATASET_NAME, SIGNATURE, ENDING)
+            plt_diff_individual(nnUNet_results, MODELS, EXPERIMENTS, PATIENT_IDS, ARCH_LABELS, DATASET_NAME, SIGNATURE, ENDING, GT_BASE_PATH)
 
     
     #########
@@ -166,7 +168,7 @@ def main():
 
 
     #########
-    RHO_VS_D_COMP = True
+    RHO_VS_D_COMP = False
     # The following will plot a comparison on different combinations of percentages of the original coefficients
     if RHO_VS_D_COMP:
 
@@ -188,8 +190,50 @@ def main():
             [1, 0], [1, 0.25], [1, 0.5], [1, 0.75], [1, 1]
         ]
 
-        plt_rho_D_comp(nnUNet_results, COEFFICIENTS, DATASET_NAME, MODEL_EXPERIMENTS, PATIENT_ID, ENDING, SIGNATURE)
+        plt_rho_D_comp(nnUNet_results, COEFFICIENTS, DATASET_NAME, MODEL_EXPERIMENTS, PATIENT_ID, ENDING, SIGNATURE, GT_BASE_PATH)
 
+
+    # Further prints if needed and/or wanted
+    ############
+    NUM_PARAMS = True
+    # Returns the number of parameters --> Results will be printed in Interactive screen
+    if NUM_PARAMS:
+        CHKPT_PATH = ''             # Checkpoint with the parameters to be counted
+
+        num_params(CHKPT_PATH)
+
+    ############
+    AUDC = True
+    # Compute AUDC (Area under the dice curve) as an extra metric if desired
+    if AUDC:
+
+        MODEL_EXPERIMENTS = {
+            'nnUnet': [
+                ['c', 'a_downsampling'], ['a', 'a_downsampling'],
+                ['c', 'b_downsampling'], ['a', 'b_downsampling'],
+                ['c', 'inputs'], ['a', 'inputs'],
+                ['c', 'b_bottleneck'], ['a', 'b_bottleneck'],
+                ['c', 'a_bottleneck'], ['a', 'a_bottleneck']
+            ],
+            'TumorSurrogate': [
+                ['c', 'a_downsampling'], ['a', 'a_downsampling'],
+                ['c', 'b_downsampling'], ['a', 'b_downsampling'],
+                ['c', 'inputs'], ['a', 'inputs'],
+                ['c', 'b_bottleneck'], ['a', 'b_bottleneck'],
+                ['c', 'a_bottleneck'], ['a', 'a_bottleneck']
+            ],
+            'ViT': [
+                ['MLP', 'one_token'],
+                ['Linear', 'one_token'],
+                ['MLP', 'mul_token'],
+                ['MLP', 'embed_concat'],
+                ['Linear', 'embed_concat'],
+                ['MLP', 'embed_add'],
+                ['Linear', 'embed_add']
+            ]
+        }
+
+        calc_audc(MODEL_EXPERIMENTS, DATASET_NAME, ENDING, SIGNATURE)
 if __name__ == "__main__":
     main()
 # %%
