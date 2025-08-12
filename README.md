@@ -78,7 +78,7 @@ The framework builds upon nnU-Net's self-configuring capabilities, adapting it f
 
 ## Model Architectures
 
-<img src="images/architectures.png" alt="TumorSurrogate Architecture" style="width: 80%;"/>
+<!-- <img src="images/architectures.png" alt="TumorSurrogate Architecture" style="width: 80%;"/> -->
 
 **TumorNetSolvers** includes three key models:  
 
