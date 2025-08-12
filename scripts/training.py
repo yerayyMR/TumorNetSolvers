@@ -49,7 +49,7 @@ COUNTER_EPOCH_EMA = None                # Every how many epochs that the ema los
 
 # Define project and training parameters
 PROJECT_NAME = "NN-based-tumor-solvers"  # for wandb
-MODEL_NAME = "ViT"  # other options are 'nnUnet', 'TumorSurrogate' and 'ViT'
+MODEL_NAME = "TumorSurrogate"  # other options are 'nnUnet', 'TumorSurrogate' and 'ViT'
 SIGNATURE = "10k"  # Unique signature for logging and reproducibility
 
 # Define experiments regarding insertion of parameters (mode and location) -- At least one must be defined and always in double list format [[], []]
@@ -87,7 +87,7 @@ SIGNATURE = "10k"  # Unique signature for logging and reproducibility
 }'''
 
 
-EXPERIMENTS = [['MLP', 'mul_token']]
+EXPERIMENTS = [['c', 'a_bottleneck_after']]
 
 
 # ============ Load Training Plans and Dataset ============

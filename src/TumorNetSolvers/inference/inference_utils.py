@@ -140,12 +140,12 @@ def construct_output_base(nnUNet_results, model, dataset_name, coefficients, exp
 
     if coefficients != None:
         if model == "ViT":
-            if all(isinstance(item, list) and len(item) == 2 for item in coefficients): # Only rho and D
+            if len(coefficients) == 2: # Only rho and D
                 output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"MODE_{experiment[1]}_METHOD_{experiment[0]}{'_' + ending if ending is not None else ''}_rho_{coefficients[0]}_D_{coefficients[1]}", 'preds')
             else:
                 output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"MODE_{experiment[1]}_METHOD_{experiment[0]}{'_'+ending if ending is not None else ''}_coeffs_{coefficients[0]}", 'preds')
         else:
-            if all(isinstance(item, list) and len(item) == 2 for item in coefficients): # Only rho and D
+            if len(coefficients) == 2: # Only rho and D
                 output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"LOC_{experiment[1]}_MODE_{experiment[0]}{'_'+ending if ending is not None else ''}_rho_{coefficients[0]}_D_{coefficients[1]}", 'preds')
             else:
                 output_base = os.path.join(nnUNet_results, dataset_name, f"{model}_{signature}", f"LOC_{experiment[1]}_MODE_{experiment[0]}{'_'+ending if ending is not None else ''}_coeffs_{coefficients[0]}", 'preds')

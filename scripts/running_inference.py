@@ -33,10 +33,10 @@ def main():
     nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
     # ============ Configuration ============
     DATASET_NAME = 'Dataset900_Brain'       # Specify the dataset name
-    MODEL = 'ViT'                        # Models to use for inference: 'ViT', 'nnUnet', 'TumorSurrogate'
+    MODEL = 'nnUnet'                        # Models to use for inference: 'ViT', 'nnUnet', 'TumorSurrogate'
     DEVICE = torch.device('cuda:0')  
 
-    ENDING = "best_FK_50_3"                           # Specific ending to the naming of the folder where weights and logs will be saved (str or None) -- If None default naming based one experiment will be used
+    ENDING = "trial"                           # Specific ending to the naming of the folder where weights and logs will be saved (str or None) -- If None default naming based one experiment will be used
     CHECKPOINT = None                       # Directory to file containing the weights of the model to be used for inference (str or None) -- If None it will use the last epoch of the best_ema_loss in the corresponding default directory
     OUTPUT_BASE = None                      # Directory or list of directories to where the inference values are saved (str or list(str) or None) -- If None it will be set to default, check: src/TumorNetSolvers/inference/inference_utils.py
 
@@ -80,7 +80,7 @@ def main():
     }'''
 
 
-    EXPERIMENTS = [['Linear', 'embed_concat']]
+    EXPERIMENTS = [['c', 'a_upsampling']]
 
     # Define coefficients -- Same format as EXPERIMENTS:
     # - If two values in inner list, they correspond uniquely to rho and D correspondingly [[rho, D]]
@@ -103,7 +103,13 @@ def main():
     ]
     COEFFICIENTS = [[0], [0.2], [0.4], [0.6], [0.8], [1]]'''
 
-    COEFFICIENTS = None
+    COEFFICIENTS = [
+        [0, 0], [0, 0.25], [0, 0.5], [0, 0.75], [0, 1],
+        [0.25, 0], [0.25, 0.25], [0.25, 0.5], [0.25, 0.75], [0.25, 1],
+        [0.5, 0], [0.5, 0.25], [0.5, 0.5], [0.5, 0.75], [0.5, 1],
+        [0.75, 0], [0.75, 0.25], [0.75, 0.5], [0.75, 0.75], [0.75, 1],
+        [1, 0], [1, 0.25], [1, 0.5], [1, 0.75], [1, 1]
+    ]
 
     # Check number of coefficients corresponds to possibly definition of several output bases
     if OUTPUT_BASE != None and COEFFICIENTS != None:
