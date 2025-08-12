@@ -77,7 +77,7 @@ def init_weights(layer):
 
 
 class Trainer(object):
-    def __init__(self, plans: dict, configuration: str, dataset_json: dict, signature:str, fold: Union[Literal['train_val', 'all'], int]= "train_val",  unpack_dataset: bool = True, loss_func: Literal['mse', 'mae']= 'mse', model: Literal['nnUnet', 'ViT', 'TumorSurrogate']= "ViT",
+    def __init__(self, plans: dict, configuration: str, dataset_json: dict, signature:str, fold: Union[Literal['train_val', 'all', 'train_val_test'], int]= "train_val_test", num_folds: int = 5,  unpack_dataset: bool = True, loss_func: Literal['mse', 'mae']= 'mse', model: Literal['nnUnet', 'ViT', 'TumorSurrogate']= "ViT",
                  device: torch.device = torch.device(f'cuda:5'), project_name="NN-based-tumor-solvers", experiment = [['c', 'a_bottleneck']], seed = 12345, num_epochs: int = 1000, batch_custom: Union[int, None] = None, ending: Union[str, None] = None,
                  max_train = 72, load_path: Union[str, None] = None, every_hours = None, patience: Union[int, None] = None, counter_epoch_save: Union[int, None] = None, counter_epoch_ema: Union[int, None] = None):
         self.signature=signature #Must Be Defined!!
@@ -89,6 +89,8 @@ class Trainer(object):
         self.device = device
         self.loss_fn= loss_func
         self.mask= nn.ReLU()
+        self.fold = fold
+        self.num_folds = num_folds
         self.seed = seed
         self.set_all_seeds(self.seed)
         self.extra = ending
@@ -101,6 +103,10 @@ class Trainer(object):
 
         # experiment
         self.experiment = experiment
+
+        if isinstance(self.fold, int):
+            _, _, _ = self.do_split()
+            return
 
         # print what device we are using
         if self.is_ddp:  # implicitly it's clear that we use cuda in this case
@@ -643,18 +649,18 @@ class Trainer(object):
                                     param_file=self.param_file,
                                     num_images_properties_loading_threshold=0)
 
-            self.print_to_log_file("Creating (and overwriting) 10-fold train/val/test cross-validation split...")
+            self.print_to_log_file(f"Creating (and overwriting) {self.num_folds}-fold train/val/test cross-validation split...")
             all_keys_sorted = list(np.sort(list(dataset.keys())))
 
             from sklearn.model_selection import KFold
-            kf = KFold(n_splits=10, shuffle=True, random_state=12345)
+            kf = KFold(n_splits=self.num_folds, shuffle=True, random_state=12345)
             all_folds = list(kf.split(all_keys_sorted))
             splits = []
 
-            for fold in range(10):
+            for fold in range(self.num_folds):
                 test_idx = fold
-                val_idx = (fold + 1) % 10
-                train_idx = [i for i in range(10) if i != test_idx and i != val_idx]
+                val_idx = (fold + 1) % self.num_folds
+                train_idx = [i for i in range(self.num_folds) if i != test_idx and i != val_idx]
 
                 test_cases = [all_keys_sorted[i] for i in all_folds[test_idx][1]]
                 val_cases = [all_keys_sorted[i] for i in all_folds[val_idx][1]]

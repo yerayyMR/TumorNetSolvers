@@ -33,6 +33,17 @@ nnUNet_preprocessed = os.getenv('nnUNet_preprocessed')
 
 # ============ Configuration ============
 
+# WARNING: FOLD must be defined as a number on the first time the training is run for each set of preprocessed data
+# (this will simply create the split file, then set to one of the string options)
+FOLD = 'train_val_test'                 # The fold represents the splitting of data (str or int): 'train_val_test' (train and validation or only training to be implemented)
+NUM_FOLDS = None                           # The number of folds for the first time the split is done (int or None): (total data is divided into an X amount of folds. One belongs to validation, another to test and the rest to training)
+
+if isinstance(FOLD,int) and not isinstance(NUM_FOLDS,int):
+    raise ValueError("A number of folds is required.")
+elif isinstance(FOLD,int) and NUM_FOLDS < 3:
+    raise ValueError("The number of folds must at least be three for division into train, val and test.")
+    
+
 # Define the dataset and training configuration
 DATASET_NAME = 'Dataset900_Brain'  
 TRAINING_CONFIGURATION = '3d_fullres'   # '2d', '3d_lowres', '3d_fullres', etc.
@@ -112,7 +123,8 @@ for experiment in EXPERIMENTS:
         configuration=TRAINING_CONFIGURATION,
         device=DEVICE,
         signature=SIGNATURE,
-        fold='train_val_test',
+        fold=FOLD,
+        num_folds=NUM_FOLDS,
         model=MODEL_NAME,
         dataset_json=dataset_json,
         project_name=PROJECT_NAME,
@@ -128,6 +140,9 @@ for experiment in EXPERIMENTS:
         counter_epoch_save=COUNTER_EPOCH_SAVE,
         counter_epoch_ema=COUNTER_EPOCH_EMA
     )
+    if isinstance(FOLD, int):
+        print("Please initialize the fold as one of the provided strings.")
+        break
 
     # Run the training process
     print("Starting training...")
