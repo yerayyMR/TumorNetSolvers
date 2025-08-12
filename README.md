@@ -33,6 +33,7 @@ The focus in this fork emphasizes the location where the coefficients of the PDE
 - **Input**: A 3D medical image (e.g., brain tissue segmentations) and tumor parameters (growth rate, diffusion coefficient, tumor location).  
 - **Output**: A 3D simulation of tumor corresponding to the given anatomy and tumor parameters.
 
+<!-- Your comment here 
 #---
 
 %### Inverse Problem
@@ -41,7 +42,7 @@ The focus in this fork emphasizes the location where the coefficients of the PDE
 %Given a high-performing differentiable forward model, we "freeze" the model and optimize its parameters based on a target tumor %simulation.  
 %- **Input**: A target tumor simulation (e.g., MRI-based 3D tumor image).  
 %- **Goal**: Infer the underlying tumor parameters (e.g., growth rate, diffusion coefficient, tumor location) by adjusting these %input parameters to match the target simulation.
-
+-->
 ---
 
 ## Core Concepts
