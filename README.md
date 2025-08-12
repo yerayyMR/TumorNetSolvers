@@ -94,7 +94,7 @@ The framework builds upon nnU-Net's self-configuring capabilities, adapting it f
 
 ## Experiments locations
 
-<img src="images/Locations.png" alt="Experiment locations" style="width: 80%;"/>
+<img src="images/Locations.jpg" alt="Experiment locations" style="width: 80%;"/>
 
 ### 1. U-Net
 
