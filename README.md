@@ -1,14 +1,9 @@
-
-# TO BE REWRITTEN, PLEASE DO NOT FOLLOW STRICTLY YET
-If it is intended to be used in the meantime, please do make sure to copy this repository instead of Zeineb's (requirements should be enough for everything but 'post_analysis.py').
-
-Nonetheless, the code works simply the README is not yet updated, sorry for the problems it can cause.
-
-
 # TumorNetSolvers: A Deep Learning Framework for Personalized PDE-Based Tumor Growth Modeling
 
 
-**TumorNetSolvers** is an adaptive deep learning framework designed for efficient personalization of PDE-based tumor growth models, focused on simulating and predicting tumor evolution. Built on the powerful nnU-Net framework, it leverages state-of-the-art neural architectures to address both **forward** and **inverse** tumor modeling problems.
+**TumorNetSolvers** is an adaptive deep learning framework designed for efficient personalization of PDE-based tumor growth models, focused on simulating and predicting tumor evolution. Built on the powerful nnU-Net framework, it leverages state-of-the-art neural architectures to address **forward** tumor modeling problems (**inverse** is currently under development).
+
+The focus in this fork emphasizes the location where the coefficients of the PDEs are inserted and their influence on predictions.
 
 ![Tumor Simulation Comparison](images/preds.png)
 
@@ -38,14 +33,14 @@ Nonetheless, the code works simply the README is not yet updated, sorry for the 
 - **Input**: A 3D medical image (e.g., brain tissue segmentations) and tumor parameters (growth rate, diffusion coefficient, tumor location).  
 - **Output**: A 3D simulation of tumor corresponding to the given anatomy and tumor parameters.
 
----
+#---
 
-### Inverse Problem
-<img src="images/inv.png" style="width: 80%;"/>
+%### Inverse Problem
+%<img src="images/inv.png" style="width: 80%;"/>
 
-Given a high-performing differentiable forward model, we "freeze" the model and optimize its parameters based on a target tumor simulation.  
-- **Input**: A target tumor simulation (e.g., MRI-based 3D tumor image).  
-- **Goal**: Infer the underlying tumor parameters (e.g., growth rate, diffusion coefficient, tumor location) by adjusting these input parameters to match the target simulation.
+%Given a high-performing differentiable forward model, we "freeze" the model and optimize its parameters based on a target tumor %simulation.  
+%- **Input**: A target tumor simulation (e.g., MRI-based 3D tumor image).  
+%- **Goal**: Infer the underlying tumor parameters (e.g., growth rate, diffusion coefficient, tumor location) by adjusting these %input parameters to match the target simulation.
 
 ---
 
@@ -59,11 +54,11 @@ TumorNetSolvers is trained on the **Fisher-Kolmogorov equation** to model brain 
    $$
 
    Where:
-   - \( c(x, t) \) is the tumor cell concentration,
-   - \( D \) is the diffusion coefficient,
-   - \( \rho \) is the growth rate,
-   - \( \nabla \cdot (D \nabla c) \) is the diffusion term,
-   - \( \rho c(1 - c) \) models logistic growth, limiting \( c \) as it approaches 1.
+   - $$c(x, t)$$ is the tumor cell concentration,
+   - $$D$$ is the diffusion coefficient,
+   - $$\rho$$ is the growth rate,
+   - $$\nabla \cdot (D \nabla c)$$ is the diffusion term,
+   - $$\rho c(1 - c)$$ models logistic growth, limiting $$c$$ as it approaches 1.
 
 
 TumorNetSolvers uses deep learning to approximate this PDE's solutions but can, in theory, adapt to different PDE-based models.
@@ -87,25 +82,68 @@ The framework builds upon nnU-Net's self-configuring capabilities, adapting it f
 **TumorNetSolvers** includes three key models:  
 
 1. **TumorSurrogate (Baseline)**  
-   - A 3D CNN that integrates anatomy info and tumor metadata for conditioned tumor simulation.
+   - A 3D CNN combined with residual connections that integrates anatomy info and tumor metadata for conditioned tumor simulation.
 
 2. **Modified nnU-Net**  
    - An adapted version of the powerful self-configuring nnU-Net framework for tumor growth simulation using conditioned inputs.
 
 3. **3D Vision Transformer (ViT)**  
-   - A transformer-based model incorporating tumor metadata as additional input tokens in the embedding space.
+   - A transformer-based model.
 
 ---
+
+## Experiments locations
+
+<img src="images/Locations.png" alt="Experiment locations" style="width: 80%;"/>
+
+### 1. U-Net
+
+- **Inputs** – Once, together with the input features, before any convolutional layer.  
+- **Before downsampling** – Prior to every convolutional layer performing the downsampling step (`stride=2`).  
+- **After downsampling** – Before every convolutional layer following a downsampling layer.  
+- **Before bottleneck** – Once, before the first convolution layer representing the bottleneck.  
+- **After bottleneck** – Once, after the last convolution layer in the bottleneck.  
+- **Before upsampling** – Prior to every convolutional layer performing the upsampling step (`stride=2`).  
+- **After upsampling** – Before every convolutional layer following an upsampling layer.  
+- **After upsampling on skips** – Before every convolutional layer following an upsampling layer.  
+  *(Used only for addition across all channels, including those concatenated from the encoder. Concatenation here would be equivalent to the normal after-upsampling case.)*
+
+### 2. Tumor Surrogate
+
+- **Inputs** – Once, together with the input features in the first layer, before any convolutional layer.  
+- **Before downsampling** – Prior to each convolutional layer performing the downsampling step (`stride=2`) and after the skip connection has been considered.  
+- **After downsampling** – After the skip connection has been retrieved and before the convolutional layer following each downsampling layer.  
+- **Before bottleneck** – Once, after the skip connection and before the convolution layer representing the bottleneck.  
+- **After bottleneck (original)** – Once, after the convolution layer corresponding to the bottleneck and before the skip connection is retrieved. This represents the original configuration.  
+- **After bottleneck (modified)** – Once, after the skip connection and before the next convolutional layer of the bottleneck.  
+- **After upsampling** – After the skip connection has been retrieved and after the convolution layer that is part of the upsampling stage. 
+
+### 3. ViT
+
+- **One token** – After patch generation, an extra token is added following a linear layer.  
+- **Multiple tokens** – After patch generation, one token is added per coefficient involved.  
+- **Embedding concatenated** – Coefficients are concatenated along the embedding dimension for all patches.  
+  *(Since the embedding dimension is large, we concatenate 30 extra channels in total—6 per coefficient—to ensure sufficient influence.)*
+
 
 ## Usage
 
 For detailed usage, refer to the scripts in the [scripts directory](scripts/) or follow the instructions below:
 
-1. **Forward Problem**  
+1. **Preprocessing of data**
+   First, the data shall be preprocessed, to do so run the `preprocessing2.py` file with the corresponding settings.
+
+2. **Training**
+   Second, run the corresponding `training.py` with the necessary conditions desired upon training. 
+
+3. **Forward Problem**  
    Run the script `running_inference.py` with the necessary inputs (3D medical image, tumor parameters) to generate tumor simulations.
 
-2. **Inverse Problem**  
-   Run the script `predict_tumor_params.py` to infer tumor parameters by optimizing against a target tumor simulation.
+4. **Evaluation of inference**  
+   Run the script `eval.py` to generate the metric values based on inference as json files.
+
+5. **Plotting**
+   Run the script `post_analysis.py` to generate the plots for a deeper analysis on the results.
 
 ---
 
@@ -115,7 +153,7 @@ To get started with **TumorNetSolvers**, install it directly from GitHub by foll
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/ZeinebZH/tumornetsolvers.git
+    git clone https://github.com/yerayyMR/TumorNetSolvers.git
     cd tumornetsolvers
     ```
 
@@ -139,7 +177,7 @@ This project is licensed under the MIT License and incorporates code from nnU-Ne
 
 ---
 
-## References
+## References (to be updated)
 
 1. **Weidner J, et al.** *Rapid Personalization of PDE-Based Tumor Growth Using a Differentiable Forward Model.* Medical Imaging with Deep Learning, 2024. [DOI](https://openreview.net/pdf?id=7SMswKSKIX)  
 2. **Ezhov I, et al.** *Geometry-aware Neural Solver for Fast Bayesian Calibration of Brain Tumor Models.* IEEE Transactions on Medical Imaging, 2021;41(5):1269–78. [DOI](https://ieeexplore.ieee.org/abstract/document/9656125)  
