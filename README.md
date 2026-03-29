@@ -168,7 +168,7 @@ To get started with **TumorNetSolvers**, install it directly from GitHub by foll
 
 ## Contributing
 
-We welcome contributions to **TumorNetSolvers**! Please use this code for continuations based on the paper and not the forked repository!
+We welcome contributions to **TumorNetSolvers**! Please use this code for work based on the paper and not the original repository!
 
 ---
 
